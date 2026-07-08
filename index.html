@@ -534,8 +534,9 @@
 
   <div class="card">
     <div class="card-title" data-en="Claude AI - quality suggestion" data-hi="Claude AI - क्वालिटी पहचान">Claude AI - क्वालिटी पहचान</div>
-    <p style="font-size:13px; color:var(--grey-500); margin-bottom:4px;" data-en="AI will automatically suggest a quality grade from the animal's side photo." data-hi="पशु की साइड फोटो से AI स्वचालित रूप से क्वालिटी का अनुमान लगाएगा।">पशु की साइड फोटो से AI स्वचालित रूप से क्वालिटी का अनुमान लगाएगा।</p>
+    <p style="font-size:13px; color:var(--grey-500); margin-bottom:4px;" data-en="AI will automatically suggest a quality grade once all 3 angle photos are taken." data-hi="तीनों फोटो लेने के बाद AI स्वचालित रूप से क्वालिटी का अनुमान लगाएगा।">तीनों फोटो लेने के बाद AI स्वचालित रूप से क्वालिटी का अनुमान लगाएगा।</p>
     <p style="font-size:11.5px; color:var(--grey-500);" id="aiProxyStatus">यह केंद्रीय रूप से सेट है — आपको कुछ नहीं करना है।</p>
+    <p style="font-size:11.5px; color:var(--amber, #b45309); margin-top:6px;" id="aiLastError"></p>
   </div>
 
   <div class="card">
@@ -687,6 +688,7 @@ window.onload = async () => {
   applyLang();
   window.addEventListener('online', () => flushQueue());
   flushQueue();
+  if (ps) await refreshCloudData();
 };
 
 /* ═══════════════ PS SELECTION ═══════════════ */
@@ -698,6 +700,52 @@ async function refreshPsList() {
     } catch (e) {}
   }
 }
+
+// Pulls this PS's camps/households/goats down from Supabase so that data
+// entered on one phone (or the laptop) shows up on another device signed in
+// as the same PS. Previously the app only ever pushed local writes up
+// (queueWrite/flushQueue) and never read shared data back down, so a second
+// device only ever saw what it had created itself. Any record not yet
+// synced from THIS device (still in `pending`) is kept alongside the cloud
+// copy rather than overwritten, so an offline entry never gets lost.
+async function refreshCloudData() {
+  if (!sb || !ps) return;
+  try {
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - HISTORY_DAYS);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const { data: cloudCamps, error: campErr } = await sb.from('camps').select('*').eq('ps_name', ps.name).gte('camp_date', cutoffStr);
+    if (campErr || !cloudCamps) return;
+    // Any local record already reflected in the cloud gets replaced by the
+    // fresh cloud copy (so edits made elsewhere show up here too); anything
+    // local not yet in the cloud (still pending sync, or just outside this
+    // window) is kept as-is rather than being wiped out.
+    const cloudCampIds = new Set(cloudCamps.map(c => c.id));
+    camps = [...cloudCamps, ...camps.filter(c => !cloudCampIds.has(c.id))];
+    store.set('sc_camps', camps);
+
+    const campIds = camps.map(c => c.id);
+    if (!campIds.length) { renderCampsList(); return; }
+
+    const { data: cloudHh } = await sb.from('households').select('*').in('camp_id', campIds);
+    if (cloudHh) {
+      const cloudHhIds = new Set(cloudHh.map(h => h.id));
+      households = [...cloudHh, ...households.filter(h => !cloudHhIds.has(h.id))];
+      store.set('sc_households', households);
+    }
+
+    const { data: cloudGoats } = await sb.from('goats').select('*').in('camp_id', campIds);
+    if (cloudGoats) {
+      const cloudGoatIds = new Set(cloudGoats.map(g => g.id));
+      goats = [...cloudGoats, ...goats.filter(g => !cloudGoatIds.has(g.id))];
+      store.set('sc_goats', goats);
+    }
+
+    const activeScreen = document.querySelector('.screen.active');
+    if (activeScreen && activeScreen.id === 'screen-camps') renderCampsList();
+    if (activeScreen && activeScreen.id === 'screen-campdetail') renderCampDetail();
+    if (activeScreen && activeScreen.id === 'screen-householddetail') renderHouseholdDetail();
+  } catch (e) {}
+}
 function renderPsOverlay() {
   const icons = ['🌸','🌻','🌼','🌺','🌷','🍀'];
   const el = document.getElementById('psOptions');
@@ -707,13 +755,14 @@ function renderPsOverlay() {
       <span class="ps-icon">${icons[i%icons.length]}</span><span>${p.name}</span>
     </button>`).join('');
 }
-function selectPS(p) {
+async function selectPS(p) {
   ps = { name:p.name, phone:p.phone, region:p.region, weight_mode:p.weight_mode||'scale' };
   store.set('sc_ps', ps);
   document.getElementById('psOverlay').classList.add('hidden');
   document.getElementById('headerPsLine').textContent = '👤 ' + ps.name + ' · ' + ps.region;
   document.getElementById('newRegion').value = ps.region;
   renderCampsList();
+  await refreshCloudData();
 }
 function changePSUser() {
   if (!confirm(L('Do you want to change PS?','क्या आप PS बदलना चाहते हैं?'))) return;
@@ -730,7 +779,7 @@ function showScreen(name) {
     const mainScreens = ['camps','calc'];
     t.classList.toggle('active', t.dataset.tab === name || (!mainScreens.includes(name) && t.dataset.tab === 'camps'));
   });
-  if (name === 'camps') renderCampsList();
+  if (name === 'camps') { renderCampsList(); refreshCloudData(); }
   if (name === 'newcamp') { document.getElementById('newCampDate').value = new Date().toISOString().slice(0,10); if(ps) document.getElementById('newRegion').value = ps.region; }
   if (name === 'campdetail') renderCampDetail();
   if (name === 'householddetail') renderHouseholdDetail();
@@ -1015,6 +1064,12 @@ async function onPhotoSelected(e, side) {
 }
 
 /* ═══════════════ CLAUDE AI (via secure proxy — see claude_proxy_appsscript.gs) ═══════════════ */
+// Any failure here is shown on-screen (not just console.error) and saved to
+// sc_last_ai_error so it's visible later in Settings too — PS phones are the
+// only place this ever runs, and there's no DevTools console to check there.
+function recordAiError(detail) {
+  store.set('sc_last_ai_error', { detail, at: new Date().toISOString() });
+}
 async function analyzePhotoWithClaude() {
   if(!CLAUDE_PROXY_URL || CLAUDE_PROXY_URL.startsWith('PASTE_')) return; // AI suggestion off until admin sets this up
 
@@ -1030,9 +1085,18 @@ async function analyzePhotoWithClaude() {
       body:JSON.stringify({ images: [frontPhotoData, leftPhotoData, backPhotoData] })
     });
 
-    if(!resp.ok){row.classList.add('hidden'); return;}
+    if(!resp.ok){
+      const bodyText = await resp.text().catch(()=>'');
+      recordAiError('HTTP '+resp.status+' from proxy'+(bodyText?(': '+bodyText.slice(0,200)):''));
+      label.textContent=L('⚠️ AI check failed (see Settings for details)','⚠️ AI जांच विफल (विवरण के लिए Settings देखें)');
+      return;
+    }
     const result=await resp.json();
-    if(result.error){ console.error('AI proxy error:', result.error); row.classList.add('hidden'); return; }
+    if(result.error){
+      recordAiError(String(result.error));
+      label.textContent=L('⚠️ AI check failed (see Settings for details)','⚠️ AI जांच विफल (विवरण के लिए Settings देखें)');
+      return;
+    }
     const q = result.quality || null;
 
     if(q){
@@ -1046,10 +1110,12 @@ async function analyzePhotoWithClaude() {
         recalcAddGoat();
       }
     } else {
-      row.classList.add('hidden');
+      recordAiError('Proxy responded but no quality could be read from Claude\'s reply');
+      label.textContent=L('⚠️ AI could not judge quality this time (see Settings)','⚠️ इस बार AI क्वालिटी तय नहीं कर पाया (Settings देखें)');
     }
   } catch(err){
-    row.classList.add('hidden');
+    recordAiError('Network/JS error: '+(err&&err.message?err.message:String(err)));
+    label.textContent=L('⚠️ AI check failed (see Settings for details)','⚠️ AI जांच विफल (विवरण के लिए Settings देखें)');
   }
 }
 
@@ -1305,6 +1371,11 @@ function renderSettings() {
   document.getElementById('aiProxyStatus').textContent = (CLAUDE_PROXY_URL && !CLAUDE_PROXY_URL.startsWith('PASTE_'))
     ? L("This is set up centrally — you don't need to do anything.",'यह केंद्रीय रूप से सेट है — आपको कुछ नहीं करना है।')
     : L("AI quality suggestion is currently off (admin hasn't set up the proxy).",'AI क्वालिटी सुझाव अभी बंद है (admin ने प्रॉक्सी सेट नहीं की)।');
+  const lastAiErr = store.get('sc_last_ai_error', null);
+  const aiErrEl = document.getElementById('aiLastError');
+  aiErrEl.textContent = lastAiErr
+    ? L('Last AI error (','पिछली AI त्रुटि (')+new Date(lastAiErr.at).toLocaleString(lang==='en'?'en-IN':'hi-IN')+'): '+lastAiErr.detail
+    : '';
   document.getElementById('settingsPsName').textContent=ps?ps.name:'—';
   const p=pending.length;
   document.getElementById('settingsPendingCount').textContent=p?(p+' '+L('records pending sync','रिकॉर्ड sync बाकी')):L('All synced','सब sync हो गया');
