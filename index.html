@@ -593,7 +593,7 @@
 const SUPABASE_URL = "https://qiggtdqsxwssieznuuwq.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpZ2d0ZHFzeHdzc2llem51dXdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNDg3MDcsImV4cCI6MjA5ODkyNDcwN30.d3205FMU7nuel1_eANgvj4bYRAH5iTKJ4CopMvMo-r4";
 const FALLBACK_REGIONS = ["Sarwankhera", "Akbarpur", "Amraudha"];
-const HISTORY_DAYS = 30;
+const HISTORY_DAYS = 15;
 // URL of the Google Apps Script proxy that holds the real Claude API key
 // server-side (see claude_proxy_appsscript.gs). The app never sees the key
 // itself — it just calls this URL with a photo and gets back a quality
@@ -678,7 +678,14 @@ window.onload = async () => {
   await refreshRegions();
   populateRegionSelects();
   renderPsOverlay();
+  // If a PS is already selected on this phone, re-sync her weight_mode/
+  // region/phone from the freshly-fetched ps_list in case an admin changed
+  // them in Supabase — previously these stayed frozen at whatever they were
+  // when she first tapped her name, so an admin's change (e.g. switching
+  // her weight_mode to 'both') never reached an already-signed-in phone.
   if (ps) {
+    const fresh = psListCache.find(p => p.name === ps.name);
+    if (fresh) { ps = { name: fresh.name, phone: fresh.phone, region: fresh.region, weight_mode: fresh.weight_mode || 'scale' }; store.set('sc_ps', ps); }
     document.getElementById('psOverlay').classList.add('hidden');
     document.getElementById('headerPsLine').textContent = '👤 ' + ps.name + ' · ' + ps.region;
   }
@@ -1380,10 +1387,26 @@ function renderSettings() {
   const p=pending.length;
   document.getElementById('settingsPendingCount').textContent=p?(p+' '+L('records pending sync','रिकॉर्ड sync बाकी')):L('All synced','सब sync हो गया');
 }
-function clearAllData(){
+async function clearAllData(){
   if(!confirm(L('⚠️ All local data will be erased. Are you sure?','⚠️ सभी local data मिट जाएगा। क्या आप सुनिश्चित हैं?'))) return;
   if(!confirm(L('Confirm again — this cannot be undone.','दोबारा पुष्टि करें — यह पूर्ववत नहीं होगा।'))) return;
-  ['sc_ps','sc_camps','sc_households','sc_goats','sc_pending','sc_rate_cache','sc_last_sync_error'].forEach(k=>localStorage.removeItem(k));
+  // Full reset: this used to only clear the app's own data keys, leaving
+  // the cached PS list (with old weight_mode/region values) and the
+  // installed app's offline cache untouched — so a PS could tap this button
+  // and still see stale settings afterwards. Now it clears everything and
+  // forces a fresh copy of the app itself, so this button is a genuine
+  // "start over completely" for troubleshooting on a phone.
+  ['sc_ps','sc_camps','sc_households','sc_goats','sc_pending','sc_rate_cache','sc_last_sync_error','sc_ps_list_cache','sc_regions_cache','sc_last_ai_error'].forEach(k=>localStorage.removeItem(k));
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+  } catch(e) {}
   location.reload();
 }
 
