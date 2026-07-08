@@ -282,12 +282,13 @@
 
   <!-- Photos: 3 angles -->
   <div class="card">
-    <div class="card-title"><span data-en="Photos (3 angles)" data-hi="फोटो (3 कोण)">फोटो (3 कोण)</span> <span style="font-size:10px; font-weight:400; color:var(--grey-500)" data-en="(the side photo is required for AI quality)" data-hi="(साइड का फोटो AI क्वालिटी के लिए जरूरी है)">(साइड का फोटो AI क्वालिटी के लिए जरूरी है)</span></div>
+    <div class="card-title"><span data-en="Photos (3 angles)" data-hi="फोटो (3 कोण)">फोटो (3 कोण)</span> <span style="font-size:10px; font-weight:400; color:var(--grey-500)" data-en="(AI quality check runs once all 3 are taken)" data-hi="(तीनों फोटो लेने के बाद AI क्वालिटी जांच होगी)">(तीनों फोटो लेने के बाद AI क्वालिटी जांच होगी)</span></div>
     <div class="photo-grid">
       <div>
         <div class="photo-box" id="photoBoxFront" onclick="triggerPhoto('front')">
           <div class="ph-icon">📷</div>
           <img id="photoFront">
+          <div class="ai-badge" id="aiBadgeFront">AI ✓</div>
           <div class="ph-label" data-en="Front" data-hi="सामने से">सामने से</div>
         </div>
         <input type="file" id="photoInputFront" accept="image/*" capture="environment" style="display:none;" onchange="onPhotoSelected(event,'front')">
@@ -305,6 +306,7 @@
         <div class="photo-box" id="photoBoxBack" onclick="triggerPhoto('back')">
           <div class="ph-icon">📸</div>
           <img id="photoBack">
+          <div class="ai-badge" id="aiBadgeBack">AI ✓</div>
           <div class="ph-label" data-en="Back" data-hi="पीछे से">पीछे से</div>
         </div>
         <input type="file" id="photoInputBack" accept="image/*" capture="environment" style="display:none;" onchange="onPhotoSelected(event,'back')">
@@ -595,7 +597,7 @@ const HISTORY_DAYS = 30;
 // server-side (see claude_proxy_appsscript.gs). The app never sees the key
 // itself — it just calls this URL with a photo and gets back a quality
 // suggestion. Leave as the placeholder to turn the AI suggestion feature off.
-const CLAUDE_PROXY_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+const CLAUDE_PROXY_URL = "https://script.google.com/macros/s/AKfycbxBS2EvErzUMkbuVHCbEhRN2kChtlVIexXZHFPsALKfK6zF3TA7idhxVt7a09VVTZJS/exec";
 
 const sb = (SUPABASE_URL.startsWith("http")) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
@@ -945,7 +947,7 @@ function prepAddGoat() {
     document.getElementById('photo'+side).src='';
     document.getElementById('photoBox'+side).classList.remove('has-photo');
   });
-  document.getElementById('aiBadgeLeft').classList.remove('show');
+  ['Front','Left','Back'].forEach(side => document.getElementById('aiBadge'+side).classList.remove('show'));
   document.getElementById('aiQualityRow').classList.add('hidden');
   document.getElementById('gResult').classList.remove('show');
   document.getElementById('gWarning').classList.remove('show');
@@ -999,19 +1001,21 @@ async function onPhotoSelected(e, side) {
       leftPhotoData=data;
       document.getElementById('photoLeft').src=data;
       document.getElementById('photoBoxLeft').classList.add('has-photo');
-      // Trigger AI analysis — the side photo specifically is what feeds quality grading
-      await analyzePhotoWithClaude(data);
     } else {
       backPhotoData=data;
       document.getElementById('photoBack').src=data;
       document.getElementById('photoBoxBack').classList.add('has-photo');
+    }
+    // AI quality check runs once — only after all 3 angles are captured
+    if(frontPhotoData && leftPhotoData && backPhotoData) {
+      await analyzePhotoWithClaude();
     }
   };
   reader.readAsDataURL(file);
 }
 
 /* ═══════════════ CLAUDE AI (via secure proxy — see claude_proxy_appsscript.gs) ═══════════════ */
-async function analyzePhotoWithClaude(base64Image) {
+async function analyzePhotoWithClaude() {
   if(!CLAUDE_PROXY_URL || CLAUDE_PROXY_URL.startsWith('PASTE_')) return; // AI suggestion off until admin sets this up
 
   const row=document.getElementById('aiQualityRow');
@@ -1023,7 +1027,7 @@ async function analyzePhotoWithClaude(base64Image) {
     const resp=await fetch(CLAUDE_PROXY_URL,{
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body:JSON.stringify({ image: base64Image })
+      body:JSON.stringify({ images: [frontPhotoData, leftPhotoData, backPhotoData] })
     });
 
     if(!resp.ok){row.classList.add('hidden'); return;}
@@ -1033,7 +1037,7 @@ async function analyzePhotoWithClaude(base64Image) {
 
     if(q){
       aiSuggestedQuality=q;
-      document.getElementById('aiBadgeLeft').classList.add('show');
+      ['Front','Left','Back'].forEach(side => document.getElementById('aiBadge'+side).classList.add('show'));
       const qLabels={'1st':L('First (1st)','पहली (1st)'),'2nd':L('Second (2nd)','दूसरी (2nd)'),'3rd':L('Third (3rd)','तीसरी (3rd)')};
       label.textContent=L('AI suggestion: ','AI सुझाव: ')+qLabels[q];
       // Auto-fill if not already set
