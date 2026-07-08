@@ -1,0 +1,25 @@
+{
+  "name": "बिक्री शिविर",
+  "short_name": "शिविर",
+  "description": "Sale camp goat data entry app",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#F0F4F2",
+  "theme_color": "#1A4D3A",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%231A4D3A'/><text y='130' font-size='120' text-anchor='middle' x='96'>🐐</text></svg>",
+      "sizes": "192x192 512x512 1024x1024",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%231A4D3A'/><text y='130' font-size='100' text-anchor='middle' x='96'>🐐</text></svg>",
+      "sizes": "192x192 512x512 1024x1024",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

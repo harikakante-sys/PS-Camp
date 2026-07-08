@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>बिक्री शिविर</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1A4D3A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="pricing.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+  :root {
+    --green-dark:#1A4D3A; --green-mid:#2D7A5A; --green-light:#4CAF82; --green-pale:#E8F5EE;
+    --amber:#D4820A; --amber-pale:#FEF3DC; --red:#C0392B; --red-pale:#FDECEB;
+    --blue:#0C447C; --blue-pale:#E6F1FB; --purple:#6B2D63; --purple-pale:#F9EFF7;
+    --grey-900:#1C1C1C; --grey-700:#444; --grey-500:#777; --grey-300:#CCC; --grey-100:#F5F5F5;
+    --white:#FFFFFF; --radius:10px; --shadow:0 2px 12px rgba(0,0,0,0.08);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Noto Sans Devanagari','Inter',sans-serif; background:#F0F4F2; color:var(--grey-900); min-height:100vh; padding-bottom:70px; }
+
+  #psOverlay { position:fixed; inset:0; background:var(--green-dark); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; padding:32px 24px; overflow-y:auto; }
+  #psOverlay.hidden { display:none; }
+  .ps-logo { font-size:44px; margin-bottom:12px; }
+  .ps-title { color:white; font-size:20px; font-weight:700; margin-bottom:6px; text-align:center; }
+  .ps-subtitle { color:rgba(255,255,255,0.7); font-size:13px; margin-bottom:24px; text-align:center; }
+  .ps-options { width:100%; max-width:340px; display:flex; flex-direction:column; gap:10px; }
+  .ps-option { background:rgba(255,255,255,0.1); border:1.5px solid rgba(255,255,255,0.2); border-radius:12px; padding:16px 20px; color:white; font-size:16px; font-family:inherit; font-weight:500; cursor:pointer; text-align:left; display:flex; align-items:center; gap:12px; }
+  .ps-option:hover { background:rgba(255,255,255,0.2); border-color:var(--green-light); }
+  .ps-option .ps-icon { font-size:22px; }
+
+  header { background:var(--green-dark); color:white; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.2); }
+  .header-left { display:flex; flex-direction:column; }
+  .header-title { font-size:15px; font-weight:700; }
+  .header-sub { font-size:11px; opacity:0.75; margin-top:1px; }
+  .header-right { display:flex; align-items:center; gap:8px; }
+  .lang-toggle { display:flex; background:rgba(255,255,255,0.15); border-radius:12px; overflow:hidden; }
+  .lang-btn { border:none; background:transparent; color:rgba(255,255,255,0.75); font-size:10.5px; font-weight:700; padding:5px 8px; cursor:pointer; font-family:inherit; }
+  .lang-btn.active { background:rgba(255,255,255,0.92); color:var(--green-dark); }
+  .sync-badge { font-size:10px; padding:3px 8px; border-radius:12px; cursor:pointer; white-space:nowrap; }
+  .sync-ok { background:rgba(255,255,255,0.15); color:white; }
+  .sync-pending { background:var(--amber); color:white; }
+  .settings-btn { background:rgba(255,255,255,0.15); border:none; color:white; font-size:16px; width:28px; height:28px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+  .tabs { display:flex; background:var(--white); border-bottom:2px solid var(--grey-100); position:fixed; bottom:0; left:0; right:0; z-index:90; box-shadow:0 -2px 8px rgba(0,0,0,0.08); }
+  .tab { flex:1; padding:10px 4px; text-align:center; font-size:11px; font-weight:500; cursor:pointer; color:var(--grey-500); }
+  .tab.active { color:var(--green-dark); font-weight:700; }
+  .tab .tab-ic { font-size:18px; display:block; margin-bottom:2px; }
+
+  .screen { display:none; padding:14px; max-width:640px; margin:0 auto; }
+  .screen.active { display:block; }
+  .back-row { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .back-row .back-ic { font-size:20px; cursor:pointer; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:var(--grey-100); flex-shrink:0; }
+  .back-row .scr-title { font-size:17px; font-weight:700; }
+  .back-row .scr-sub { font-size:12px; color:var(--grey-500); margin-top:1px; }
+
+  .card { background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; margin-bottom:12px; }
+  .card-title { font-size:12px; font-weight:700; color:var(--green-dark); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--grey-100); }
+  .field { margin-bottom:12px; }
+  .field:last-child { margin-bottom:0; }
+  label { display:block; font-size:13px; font-weight:500; color:var(--grey-700); margin-bottom:5px; }
+  label .req { color:var(--red); margin-left:2px; }
+  label .opt { color:var(--grey-500); font-weight:400; font-size:11px; margin-left:4px; }
+  input[type="text"], input[type="number"], input[type="tel"], input[type="date"], input[type="datetime-local"], select, textarea {
+    width:100%; padding:11px 13px; border:1.5px solid var(--grey-300); border-radius:8px;
+    font-size:15px; font-family:inherit; color:var(--grey-900); background:var(--white); appearance:none; -webkit-appearance:none;
+  }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--green-mid); box-shadow:0 0 0 3px rgba(45,122,90,0.12); }
+  select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23777' d='M6 8L0 0h12z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 13px center; padding-right:36px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .toggle-group { display:flex; gap:8px; }
+  .toggle-btn { flex:1; padding:11px; border:1.5px solid var(--grey-300); border-radius:8px; background:var(--white); font-size:14px; font-family:inherit; cursor:pointer; text-align:center; color:var(--grey-700); }
+  .toggle-btn.sel { border-color:var(--green-mid); background:var(--green-pale); color:var(--green-dark); font-weight:600; }
+  .toggle-btn.sel-female { border-color:#9C4A8A; background:#F9EFF7; color:#6B2D63; }
+  .toggle-btn.sel-amber { border-color:var(--amber); background:var(--amber-pale); color:var(--amber); }
+  .toggle-btn.sel-red { border-color:var(--red); background:var(--red-pale); color:var(--red); }
+
+  .result-card { background:var(--green-pale); border:1.5px solid var(--green-light); border-radius:var(--radius); padding:16px; margin-bottom:12px; display:none; }
+  .result-card.show { display:block; }
+  .result-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .result-row:last-child { margin-bottom:0; }
+  .result-label { font-size:13px; color:var(--grey-500); }
+  .result-value { font-size:15px; font-weight:700; color:var(--green-dark); }
+  .result-value.big { font-size:22px; }
+  .result-divider { border:none; border-top:1px dashed var(--green-light); margin:8px 0; }
+
+  .info-card { background:var(--blue-pale); border:1.5px solid #A8C8E8; border-radius:var(--radius); padding:12px 14px; margin-bottom:12px; font-size:13px; color:var(--blue); }
+
+  .warning-msg { background:var(--red-pale); border:1.5px solid var(--red); color:var(--red); border-radius:8px; padding:12px 14px; font-size:13px; margin-bottom:12px; display:none; }
+  .warning-msg.show { display:block; }
+
+  .btn-primary { width:100%; padding:15px; background:var(--green-dark); color:white; border:none; border-radius:var(--radius); font-size:16px; font-family:inherit; font-weight:600; cursor:pointer; margin-bottom:8px; }
+  .btn-primary:disabled { background:var(--grey-300); cursor:not-allowed; }
+  .btn-secondary { width:100%; padding:13px; background:var(--white); color:var(--green-dark); border:1.5px solid var(--green-mid); border-radius:var(--radius); font-size:14px; font-family:inherit; font-weight:600; cursor:pointer; margin-bottom:8px; }
+  .btn-small { padding:8px 14px; border:1.5px solid var(--green-mid); border-radius:8px; background:var(--white); color:var(--green-dark); font-size:13px; font-family:inherit; font-weight:600; cursor:pointer; }
+  .btn-amber { width:100%; padding:13px; background:var(--amber); color:white; border:none; border-radius:var(--radius); font-size:14px; font-family:inherit; font-weight:600; cursor:pointer; margin-bottom:8px; }
+
+  /* Photo section — 3 angles across */
+  .photo-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:4px; }
+  .photo-box { border:1.5px dashed var(--grey-300); border-radius:10px; padding:10px 6px; text-align:center; cursor:pointer; position:relative; overflow:hidden; }
+  .photo-box.has-photo { border-color:var(--green-light); border-style:solid; }
+  .photo-box img { width:100%; height:74px; object-fit:cover; border-radius:6px; display:none; }
+  .photo-box.has-photo img { display:block; }
+  .photo-box .ph-label { font-size:10px; color:var(--grey-500); margin-top:5px; }
+  .photo-box .ph-icon { font-size:20px; }
+  .photo-box.has-photo .ph-icon { display:none; }
+  .ai-badge { display:none; position:absolute; top:4px; right:4px; background:var(--green-dark); color:white; font-size:9px; padding:2px 5px; border-radius:6px; font-weight:700; }
+  .ai-badge.show { display:block; }
+
+  /* AI quality suggestion */
+  .ai-quality-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; padding:10px 12px; background:var(--amber-pale); border:1.5px solid var(--amber); border-radius:8px; }
+  .ai-quality-row.hidden { display:none; }
+  .ai-quality-label { font-size:12px; color:var(--amber); flex:1; }
+  .ai-accept-btn { padding:6px 12px; background:var(--amber); color:white; border:none; border-radius:6px; font-size:12px; font-family:inherit; font-weight:700; cursor:pointer; }
+  .ai-loading { font-size:12px; color:var(--grey-500); font-style:italic; }
+
+  /* Weight section */
+  .weight-divider { text-align:center; font-size:11px; color:var(--grey-500); margin:10px 0; position:relative; }
+  .weight-divider::before, .weight-divider::after { content:''; position:absolute; top:50%; width:42%; height:1px; background:var(--grey-300); }
+  .weight-divider::before { left:0; }
+  .weight-divider::after { right:0; }
+  .eff-weight-row { display:flex; align-items:center; justify-content:space-between; background:var(--green-pale); border-radius:8px; padding:10px 13px; margin-top:10px; }
+  .eff-weight-label { font-size:12px; color:var(--green-dark); }
+  .eff-weight-value { font-size:18px; font-weight:700; color:var(--green-dark); }
+
+  /* Goat rows & detail */
+  .list-card { background:var(--white); border-radius:12px; padding:14px; margin-bottom:10px; cursor:pointer; box-shadow:var(--shadow); }
+  .list-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .list-card-name { font-weight:700; font-size:15px; }
+  .list-card-meta { font-size:12px; color:var(--grey-500); margin:3px 0 8px; }
+  .list-card-stats { display:flex; gap:18px; }
+  .list-card-stat-label { font-size:10.5px; color:var(--grey-500); }
+  .list-card-stat-value { font-size:14px; font-weight:700; }
+  .chip { display:inline-block; padding:3px 9px; border-radius:10px; font-size:10.5px; font-weight:600; white-space:nowrap; }
+  .chip-ready { background:var(--green-pale); color:var(--green-dark); }
+  .chip-norate { background:var(--red-pale); color:var(--red); }
+  .chip-collected { background:var(--amber-pale); color:var(--amber); }
+  .chip-mandi { background:var(--blue-pale); color:var(--blue); }
+
+  .goat-row { background:var(--white); border-radius:10px; padding:12px; margin-bottom:8px; box-shadow:var(--shadow); cursor:pointer; }
+  .goat-row:active { background:var(--grey-100); }
+  .goat-row-top { display:flex; align-items:center; gap:10px; }
+  .goat-thumb { width:38px; height:38px; border-radius:8px; background:var(--grey-100); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; overflow:hidden; }
+  .goat-info { flex:1; min-width:0; }
+  .goat-info .gname { font-size:13.5px; font-weight:600; }
+  .goat-info .gmeta { font-size:11.5px; color:var(--grey-500); }
+  .goat-chips { display:flex; gap:4px; margin-top:5px; flex-wrap:wrap; }
+  .resp-row { display:flex; gap:6px; margin-top:8px; }
+  .resp-btn { flex:1; font-size:11px; padding:7px 4px; border-radius:6px; border:1.5px solid var(--grey-300); background:white; font-family:inherit; cursor:pointer; text-align:center; color:var(--grey-700); }
+  .resp-btn.resp-interested.sel { border-color:var(--green-mid); background:var(--green-pale); color:var(--green-dark); font-weight:700; }
+  .resp-btn.resp-awaited.sel { border-color:var(--amber); background:var(--amber-pale); color:var(--amber); font-weight:700; }
+  .resp-btn.resp-not_interested.sel { border-color:var(--red); background:var(--red-pale); color:var(--red); font-weight:700; }
+
+  /* Goat detail - weight events */
+  .weight-event { background:var(--white); border-radius:10px; padding:14px; margin-bottom:10px; box-shadow:var(--shadow); }
+  .we-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .we-title { font-size:14px; font-weight:700; color:var(--grey-700); }
+  .we-done { font-size:12px; color:var(--green-mid); font-weight:600; }
+  .we-pending { font-size:12px; color:var(--grey-500); }
+  .shrinkage-banner { background:var(--amber-pale); border:1.5px solid var(--amber); border-radius:8px; padding:10px 14px; margin-top:10px; display:flex; justify-content:space-between; align-items:center; }
+
+  .empty-state { text-align:center; padding:36px 20px; color:var(--grey-500); font-size:14px; }
+  .table-summary { background:var(--green-pale); border-radius:var(--radius); padding:12px 16px; margin-top:4px; margin-bottom:12px; display:flex; gap:18px; flex-wrap:wrap; }
+  .summary-item { font-size:11.5px; }
+  .summary-item strong { font-size:14.5px; color:var(--green-dark); display:block; }
+  .rate-status { display:flex; align-items:center; gap:6px; font-size:11px; padding:7px 10px; border-radius:8px; margin-bottom:12px; }
+  .rate-status.ok { background:var(--green-pale); color:var(--green-dark); }
+  .rate-status.bad { background:var(--red-pale); color:var(--red); }
+
+  .success-toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--green-dark); color:white; padding:12px 24px; border-radius:24px; font-size:14px; font-weight:500; box-shadow:0 4px 16px rgba(0,0,0,0.2); transition:transform 0.3s; z-index:999; white-space:nowrap; }
+  .success-toast.show { transform:translateX(-50%) translateY(0); }
+
+  /* Settings */
+  .settings-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--grey-100); }
+  .settings-row:last-child { border-bottom:none; }
+  .settings-label { font-size:14px; font-weight:500; }
+  .settings-sub { font-size:11.5px; color:var(--grey-500); margin-top:2px; }
+
+  /* API loading spinner */
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--grey-300); border-top-color:var(--amber); border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:4px; }
+</style>
+</head>
+<body>
+
+<!-- ══ PS SELECTION ══ -->
+<div id="psOverlay">
+  <div class="ps-logo">🐐</div>
+  <div class="ps-title" data-en="Sale Camp" data-hi="बिक्री शिविर">बिक्री शिविर</div>
+  <div class="ps-subtitle" data-en="Who are you? Select your name" data-hi="आप कौन हैं? अपना नाम चुनें">आप कौन हैं? अपना नाम चुनें</div>
+  <div class="ps-options" id="psOptions"><div style="color:white; font-size:13px;">लोड हो रहा है...</div></div>
+</div>
+
+<!-- ══ HEADER ══ -->
+<header>
+  <div class="header-left">
+    <div class="header-title">🐐 <span data-en="Sale Camp" data-hi="बिक्री शिविर">बिक्री शिविर</span></div>
+    <div class="header-sub" id="headerPsLine">—</div>
+  </div>
+  <div class="header-right">
+    <div class="lang-toggle">
+      <button class="lang-btn" id="langBtnHi" onclick="setLang('hi')">हिं</button>
+      <button class="lang-btn" id="langBtnEn" onclick="setLang('en')">EN</button>
+    </div>
+    <button class="settings-btn" onclick="showScreen('settings')" title="Settings">⚙️</button>
+    <div class="sync-badge sync-ok" id="syncBadge" onclick="flushQueue(true)">✓ Synced</div>
+  </div>
+</header>
+<div id="syncErrorBar" style="display:none; background:var(--red-pale); color:var(--red); font-size:11px; padding:6px 14px;"></div>
+
+<!-- ══ SCREEN: CAMPS ══ -->
+<div class="screen active" id="screen-camps">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+    <p style="font-size:18px; font-weight:700;" data-en="Camps (last 30 days)" data-hi="शिविर (पिछले 30 दिन)">शिविर (पिछले 30 दिन)</p>
+  </div>
+  <p style="font-size:12px; color:var(--grey-500); margin-bottom:14px;" id="campsSubline">—</p>
+  <div id="campsList"><div class="empty-state" data-en="No camps found" data-hi="कोई शिविर नहीं मिला">कोई शिविर नहीं मिला</div></div>
+  <button class="btn-primary" onclick="showScreen('newcamp')" style="margin-top:6px;">➕ <span data-en="Start new camp" data-hi="नया शिविर शुरू करें">नया शिविर शुरू करें</span></button>
+</div>
+
+<!-- ══ SCREEN: NEW CAMP ══ -->
+<div class="screen" id="screen-newcamp">
+  <div class="back-row"><div class="back-ic" onclick="showScreen('camps')">←</div><div><div class="scr-title" data-en="New camp" data-hi="नया शिविर">नया शिविर</div></div></div>
+  <div class="card">
+    <div class="field"><label class="req" data-en="Village name" data-hi="गांव का नाम">गांव का नाम</label><input type="text" id="newVillage" data-ph-en="e.g. Rampura" data-ph-hi="जैसे रामपुरा" placeholder="जैसे रामपुरा"></div>
+    <div class="field"><label class="req" data-en="Region" data-hi="क्षेत्र">क्षेत्र</label><select id="newRegion"></select>
+      <div style="font-size:11px;color:var(--grey-500);margin-top:4px;" data-en="Determines which rate card applies" data-hi="यह तय करता है कि कौन सा रेट कार्ड लागू होगा">यह तय करता है कि कौन सा रेट कार्ड लागू होगा</div>
+    </div>
+    <div class="field"><label class="req" data-en="Date" data-hi="तारीख">तारीख</label><input type="date" id="newCampDate"></div>
+  </div>
+  <button class="btn-primary" onclick="createCamp()" data-en="Start camp" data-hi="शिविर शुरू करें">शिविर शुरू करें</button>
+</div>
+
+<!-- ══ SCREEN: CAMP DETAIL ══ -->
+<div class="screen" id="screen-campdetail">
+  <div class="back-row"><div class="back-ic" onclick="showScreen('camps')">←</div>
+    <div><div class="scr-title" id="cdVillage">—</div><div class="scr-sub" id="cdMeta">—</div></div>
+  </div>
+  <div class="rate-status" id="cdRateStatus">—</div>
+  <div class="table-summary" id="cdSummary">
+    <div class="summary-item"><strong id="cdHhCount">0</strong><span data-en="Homes" data-hi="घर">घर</span></div>
+    <div class="summary-item"><strong id="cdGoatCount">0</strong><span data-en="Animals" data-hi="पशु">पशु</span></div>
+    <div class="summary-item"><strong id="cdInterestedValue">₹0</strong><span data-en="Interested value" data-hi="इच्छुक मूल्य">इच्छुक मूल्य</span></div>
+  </div>
+  <div id="hhList"><div class="empty-state" data-en="No households added yet" data-hi="अभी कोई घर नहीं जोड़ा गया">अभी कोई घर नहीं जोड़ा गया</div></div>
+  <button class="btn-primary" onclick="showScreen('newhousehold')" style="margin-top:6px;">➕ <span data-en="Add household" data-hi="घर जोड़ें">घर जोड़ें</span></button>
+</div>
+
+<!-- ══ SCREEN: NEW HOUSEHOLD ══ -->
+<div class="screen" id="screen-newhousehold">
+  <div class="back-row"><div class="back-ic" onclick="showScreen('campdetail')">←</div><div><div class="scr-title" data-en="New household" data-hi="नया घर">नया घर</div></div></div>
+  <div class="card">
+    <div class="field"><label class="req" data-en="Household name" data-hi="घर का नाम">घर का नाम</label><input type="text" id="hhName" data-ph-en="Enter name" data-ph-hi="नाम लिखें" placeholder="नाम लिखें"></div>
+    <div class="field"><label data-en="Mobile number" data-hi="मोबाइल नंबर">मोबाइल नंबर</label><input type="tel" id="hhMobile" data-ph-en="10-digit number" data-ph-hi="10 अंकों का नंबर" placeholder="10 अंकों का नंबर"></div>
+    <div class="field"><label data-en="How many goats to sell (estimate)" data-hi="कितनी बकरियां बेचनी हैं (अनुमान)">कितनी बकरियां बेचनी हैं (अनुमान)</label><input type="number" id="hhExpected" min="1" data-ph-en="e.g. 3" data-ph-hi="जैसे 3" placeholder="जैसे 3"></div>
+  </div>
+  <button class="btn-primary" onclick="createHousehold()" data-en="Add household" data-hi="घर जोड़ें">घर जोड़ें</button>
+</div>
+
+<!-- ══ SCREEN: HOUSEHOLD DETAIL ══ -->
+<div class="screen" id="screen-householddetail">
+  <div class="back-row"><div class="back-ic" onclick="showScreen('campdetail')">←</div>
+    <div><div class="scr-title" id="hdName">—</div><div class="scr-sub" id="hdMeta">—</div></div>
+  </div>
+  <div class="table-summary" id="hdSummary">
+    <div class="summary-item"><strong id="hdGoatCount">0 / 0</strong><span data-en="Animals added" data-hi="पशु जोड़े गए">पशु जोड़े गए</span></div>
+    <div class="summary-item"><strong id="hdInterestedValue">₹0</strong><span data-en="Interested value" data-hi="इच्छुक मूल्य">इच्छुक मूल्य</span></div>
+  </div>
+  <div id="goatList"><div class="empty-state" data-en="No animals added yet" data-hi="अभी कोई पशु नहीं जोड़ा गया">अभी कोई पशु नहीं जोड़ा गया</div></div>
+  <button class="btn-primary" onclick="showScreen('newgoat')" style="margin-top:6px;">➕ <span data-en="Add animal" data-hi="पशु जोड़ें">पशु जोड़ें</span></button>
+</div>
+
+<!-- ══ SCREEN: NEW GOAT ══ -->
+<div class="screen" id="screen-newgoat">
+  <div class="back-row"><div class="back-ic" onclick="showScreen('householddetail')">←</div>
+    <div><div class="scr-title" data-en="New animal" data-hi="नया पशु">नया पशु</div><div class="scr-sub" id="ngHhLine">—</div></div>
+  </div>
+
+  <!-- Photos: 3 angles -->
+  <div class="card">
+    <div class="card-title"><span data-en="Photos (3 angles)" data-hi="फोटो (3 कोण)">फोटो (3 कोण)</span> <span style="font-size:10px; font-weight:400; color:var(--grey-500)" data-en="(the side photo is required for AI quality)" data-hi="(साइड का फोटो AI क्वालिटी के लिए जरूरी है)">(साइड का फोटो AI क्वालिटी के लिए जरूरी है)</span></div>
+    <div class="photo-grid">
+      <div>
+        <div class="photo-box" id="photoBoxFront" onclick="triggerPhoto('front')">
+          <div class="ph-icon">📷</div>
+          <img id="photoFront">
+          <div class="ph-label" data-en="Front" data-hi="सामने से">सामने से</div>
+        </div>
+        <input type="file" id="photoInputFront" accept="image/*" capture="environment" style="display:none;" onchange="onPhotoSelected(event,'front')">
+      </div>
+      <div>
+        <div class="photo-box" id="photoBoxLeft" onclick="triggerPhoto('left')">
+          <div class="ph-icon">📷</div>
+          <img id="photoLeft">
+          <div class="ai-badge" id="aiBadgeLeft">AI ✓</div>
+          <div class="ph-label" data-en="Side" data-hi="बायीं साइड">बायीं साइड</div>
+        </div>
+        <input type="file" id="photoInputLeft" accept="image/*" capture="environment" style="display:none;" onchange="onPhotoSelected(event,'left')">
+      </div>
+      <div>
+        <div class="photo-box" id="photoBoxBack" onclick="triggerPhoto('back')">
+          <div class="ph-icon">📸</div>
+          <img id="photoBack">
+          <div class="ph-label" data-en="Back" data-hi="पीछे से">पीछे से</div>
+        </div>
+        <input type="file" id="photoInputBack" accept="image/*" capture="environment" style="display:none;" onchange="onPhotoSelected(event,'back')">
+      </div>
+    </div>
+    <!-- AI quality suggestion row -->
+    <div class="ai-quality-row hidden" id="aiQualityRow">
+      <span class="ai-quality-label" id="aiQualityLabel">AI सुझाव: ...</span>
+      <button class="ai-accept-btn" onclick="acceptAIQuality()"><span data-en="✓ Accept" data-hi="✓ स्वीकार">✓ स्वीकार</span></button>
+    </div>
+  </div>
+
+  <!-- Animal details -->
+  <div class="card">
+    <div class="card-title" data-en="Animal details" data-hi="पशु की जानकारी">पशु की जानकारी</div>
+    <div class="field">
+      <label class="req" data-en="Male / Female" data-hi="नर / मादा">नर / मादा</label>
+      <div class="toggle-group">
+        <button class="toggle-btn" id="btnMale" onclick="setSex('male')">🐐 <span data-en="Male" data-hi="नर">नर</span></button>
+        <button class="toggle-btn" id="btnFemale" onclick="setSex('female')">🐑 <span data-en="Female" data-hi="मादा">मादा</span></button>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label class="req" data-en="Teeth" data-hi="दांत">दांत</label>
+        <select id="gTeeth" onchange="recalcAddGoat()">
+          <option value="" data-en="Select" data-hi="चुनें">चुनें</option>
+          <option value="0" data-en="0 (milk teeth)" data-hi="0 (दूध के दांत)">0 (दूध के दांत)</option>
+          <option value="2" data-en="2 teeth" data-hi="2 दांत">2 दांत</option>
+          <option value="4" data-en="4 teeth" data-hi="4 दांत">4 दांत</option>
+          <option value="6" data-en="6 teeth" data-hi="6 दांत">6 दांत</option>
+          <option value="8" data-en="8 teeth" data-hi="8 दांत">8 दांत</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="req" data-en="Quality" data-hi="क्वालिटी">क्वालिटी</label>
+        <select id="gQuality" onchange="recalcAddGoat()">
+          <option value="" data-en="Select" data-hi="चुनें">चुनें</option>
+          <option value="1st" data-en="First (1st)" data-hi="पहली (1st)">पहली (1st)</option>
+          <option value="2nd" data-en="Second (2nd)" data-hi="दूसरी (2nd)">दूसरी (2nd)</option>
+          <option value="3rd" data-en="Third (3rd)" data-hi="तीसरी (3rd)">तीसरी (3rd)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Weight section — which fields show depends on this PS's admin-assigned
+       weight_mode (scale / 2dim / 5dim / both), fixed for the whole camp. -->
+  <div class="card">
+    <div class="card-title" data-en="Weight and measurements" data-hi="वजन और माप">वजन और माप</div>
+
+    <!-- Scale weight — shown for weight_mode 'scale' or 'both' -->
+    <div id="scaleFieldWrap">
+      <div class="field">
+        <label data-en="Scale weight (kg)" data-hi="तराजू वजन (kg)">तराजू वजन (kg)</label>
+        <input type="number" id="gWeightScale" min="1" max="120" step="0.5" data-ph-en="e.g. 22.5" data-ph-hi="जैसे 22.5" placeholder="जैसे 22.5" oninput="recalcAddGoat()">
+      </div>
+    </div>
+
+    <div class="weight-divider" id="weightDividerText" style="display:none;" data-en="— or by measurement —" data-hi="— या माप से —">— या माप से —</div>
+
+    <!-- Tape measurements — shown for weight_mode '2dim', '5dim', or 'both' -->
+    <div id="tapeFieldWrap" style="display:none;">
+      <div class="row2" style="margin-top:8px;">
+        <div class="field"><label data-en="Heart girth / HG (cm)" data-hi="हार्ट गर्थ / HG (cm)">हार्ट गर्थ / HG (cm)</label><input type="number" id="gHg" min="30" max="150" data-ph-en="e.g. 75" data-ph-hi="जैसे 75" placeholder="जैसे 75" oninput="recalcAddGoat()"></div>
+        <div class="field"><label data-en="Body length / BL (cm)" data-hi="बॉडी लेंथ / BL (cm)">बॉडी लेंथ / BL (cm)</label><input type="number" id="gBl" min="30" max="120" data-ph-en="e.g. 60" data-ph-hi="जैसे 60" placeholder="जैसे 60" oninput="recalcAddGoat()"></div>
+      </div>
+    </div>
+
+    <!-- 5-dim extra measurements — shown only for weight_mode '5dim' (captured
+         for future AI weight-model use; don't affect price yet) -->
+    <div class="row3" id="fiveDimExtraWrap" style="display:none;">
+      <div class="field"><label data-en="Height (cm)" data-hi="ऊंचाई (cm)">ऊंचाई (cm)</label><span class="opt" data-en="optional" data-hi="वैकल्पिक">वैकल्पिक</span><input type="number" id="gHt" min="20" max="100" placeholder="—"></div>
+      <div class="field"><label data-en="Rump width" data-hi="रम्प चौड़ाई">रम्प चौड़ाई</label><span class="opt" data-en="optional" data-hi="वैकल्पिक">वैकल्पिक</span><input type="number" id="gRw" min="5" max="60" placeholder="—"></div>
+      <div class="field"><label data-en="Paunch girth" data-hi="पौंच गर्थ">पौंच गर्थ</label><span class="opt" data-en="optional" data-hi="वैकल्पिक">वैकल्पिक</span><input type="number" id="gPg" min="30" max="150" placeholder="—"></div>
+    </div>
+
+    <!-- Effective weight display — only meaningful in 'both' mode, where scale
+         and tape are cross-checked and the lower of the two is used. -->
+    <div class="eff-weight-row" id="effWeightRow" style="display:none;">
+      <div>
+        <div class="eff-weight-label" id="effWeightLabel">प्रभावी वजन (न्यूनतम)</div>
+        <div style="font-size:10px; color:var(--grey-500);" id="effWeightBreakdown">—</div>
+      </div>
+      <div class="eff-weight-value" id="effWeightVal">— kg</div>
+    </div>
+  </div>
+
+  <div class="warning-msg" id="gWarning" data-en="⚠️ This animal doesn't fall in our purchase category (only young males and old females)." data-hi="⚠️ यह पशु हमारी खरीद श्रेणी में नहीं आता (केवल युवा नर और पुरानी मादा)।">⚠️ यह पशु हमारी खरीद श्रेणी में नहीं आता (केवल युवा नर और पुरानी मादा)।</div>
+  <div class="warning-msg" id="gNoRate" data-en="⚠️ No valid rate card is available for this region. Connect to the internet once and sync." data-hi="⚠️ इस क्षेत्र के लिए कोई मान्य रेट कार्ड उपलब्ध नहीं है। इंटरनेट से एक बार जुड़ें और सिंक करें।">⚠️ इस क्षेत्र के लिए कोई मान्य रेट कार्ड उपलब्ध नहीं है। इंटरनेट से एक बार जुड़ें और सिंक करें।</div>
+
+  <div class="result-card" id="gResult">
+    <div class="result-row"><span class="result-label" data-en="Category" data-hi="श्रेणी">श्रेणी</span><span class="result-value" id="gCat">—</span></div>
+    <div class="result-row"><span class="result-label" data-en="Rate card (₹/kg)" data-hi="रेट कार्ड (₹/kg)">रेट कार्ड (₹/kg)</span><span class="result-value" id="gRate">—</span></div>
+    <hr class="result-divider">
+    <div class="result-row"><span class="result-label" data-en="Final price" data-hi="अंतिम मूल्य">अंतिम मूल्य</span><span class="result-value big" id="gFinal">₹—</span></div>
+  </div>
+
+  <!-- Response -->
+  <div class="card">
+    <div class="card-title" data-en="Household response" data-hi="घर की प्रतिक्रिया">घर की प्रतिक्रिया</div>
+    <div class="toggle-group">
+      <button class="toggle-btn" id="respInterested" onclick="setResponse('interested')">✅ <span data-en="Interested" data-hi="इच्छुक">इच्छुक</span></button>
+      <button class="toggle-btn" id="respAwaited" onclick="setResponse('awaited')">⏳ <span data-en="Awaited" data-hi="सोच रहे">सोच रहे</span></button>
+      <button class="toggle-btn" id="respNotInterested" onclick="setResponse('not_interested')">❌ <span data-en="Not interested" data-hi="अनिच्छुक">अनिच्छुक</span></button>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="btnSaveGoat" onclick="saveGoat()" disabled style="margin-top:4px;">💾 <span data-en="Save" data-hi="सहेजें">सहेजें</span></button>
+</div>
+
+<!-- ══ SCREEN: GOAT DETAIL (collection + mandi weights) ══ -->
+<div class="screen" id="screen-goatdetail">
+  <div class="back-row"><div class="back-ic" id="gdBackBtn" onclick="showScreen('householddetail')">←</div>
+    <div><div class="scr-title" data-en="Animal detail" data-hi="पशु विवरण">पशु विवरण</div><div class="scr-sub" id="gdSub">—</div></div>
+  </div>
+
+  <!-- Summary card -->
+  <div class="card" id="gdInfoCard">
+    <div class="card-title" data-en="Recorded at the camp" data-hi="शिविर में दर्ज जानकारी">शिविर में दर्ज जानकारी</div>
+    <div id="gdInfoContent"></div>
+  </div>
+
+  <!-- Collection weight -->
+  <div class="weight-event" id="weCollection">
+    <div class="we-header">
+      <div>
+        <div class="we-title">🚛 <span data-en="Collection day weight" data-hi="संग्रह दिवस वजन">संग्रह दिवस वजन</span></div>
+        <div style="font-size:11px; color:var(--grey-500);" data-en="Weight on the day the animal is picked up" data-hi="पशु लेने के दिन का वजन">पशु लेने के दिन का वजन</div>
+      </div>
+      <div id="weCollectionStatus" class="we-pending">दर्ज नहीं</div>
+    </div>
+    <div id="weCollectionForm">
+      <div class="field"><label data-en="Weight (kg)" data-hi="वजन (kg)">वजन (kg)</label><input type="number" id="collWeight" min="1" max="120" step="0.5" placeholder="जैसे 21.5" oninput="updateShrinkagePreview()"></div>
+      <div class="field"><label data-en="Date and time" data-hi="तारीख और समय">तारीख और समय</label><input type="datetime-local" id="collDatetime"></div>
+      <div class="row2">
+        <div class="field"><label data-en="HG (cm)" data-hi="HG (cm)">HG (cm)</label> <span class="opt" data-en="optional" data-hi="वैकल्पिक">वैकल्पिक</span><input type="number" id="collHg" placeholder="—"></div>
+        <div class="field"><label data-en="BL (cm)" data-hi="BL (cm)">BL (cm)</label> <span class="opt" data-en="optional" data-hi="वैकल्पिक">वैकल्पिक</span><input type="number" id="collBl" placeholder="—"></div>
+      </div>
+      <button class="btn-amber" onclick="saveCollectionWeight()">💾 <span data-en="Save collection weight" data-hi="संग्रह वजन सहेजें">संग्रह वजन सहेजें</span></button>
+    </div>
+  </div>
+
+  <!-- Mandi weight -->
+  <div class="weight-event" id="weMandi">
+    <div class="we-header">
+      <div>
+        <div class="we-title">🏪 <span data-en="Mandi weight" data-hi="मंडी वजन">मंडी वजन</span></div>
+        <div style="font-size:11px; color:var(--grey-500);" data-en="Weight on arrival at the mandi" data-hi="मंडी पहुंचने पर वजन">मंडी पहुंचने पर वजन</div>
+      </div>
+      <div id="weMandiStatus" class="we-pending">दर्ज नहीं</div>
+    </div>
+    <div id="weMandiForm">
+      <div class="field"><label data-en="Weight (kg)" data-hi="वजन (kg)">वजन (kg)</label><input type="number" id="mandiWeight" min="1" max="120" step="0.5" placeholder="जैसे 20.0" oninput="updateShrinkagePreview()"></div>
+      <div class="field"><label data-en="Date and time" data-hi="तारीख और समय">तारीख और समय</label><input type="datetime-local" id="mandiDatetime"></div>
+      <button class="btn-primary" onclick="saveMandiWeight()">💾 <span data-en="Save mandi weight" data-hi="मंडी वजन सहेजें">मंडी वजन सहेजें</span></button>
+    </div>
+  </div>
+
+  <!-- Shrinkage -->
+  <div class="shrinkage-banner" id="shrinkageBanner" style="display:none;">
+    <div>
+      <div style="font-size:12px; color:var(--amber); font-weight:600;" data-en="Weight loss (shrinkage)" data-hi="वजन में कमी (Shrinkage)">वजन में कमी (Shrinkage)</div>
+      <div style="font-size:11px; color:var(--grey-700);" data-en="Collection → Mandi" data-hi="संग्रह → मंडी">संग्रह → मंडी</div>
+    </div>
+    <div style="font-size:22px; font-weight:700; color:var(--amber);" id="shrinkageVal">—%</div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: CALCULATOR ══ -->
+<div class="screen" id="screen-calc">
+  <div class="card">
+    <div class="card-title" data-en="Quick calculator" data-hi="त्वरित कैलकुलेटर">त्वरित कैलकुलेटर</div>
+    <div style="font-size:11px;color:var(--grey-500);margin-bottom:12px;" data-en="Not linked to any record - for estimation only" data-hi="किसी रिकॉर्ड से जुड़ा नहीं - सिर्फ अनुमान के लिए">किसी रिकॉर्ड से जुड़ा नहीं - सिर्फ अनुमान के लिए</div>
+    <div class="field"><label class="req" data-en="Region" data-hi="क्षेत्र">क्षेत्र</label><select id="cRegion" onchange="recalcCalc()"></select></div>
+    <div class="field">
+      <label class="req" data-en="Male / Female" data-hi="नर / मादा">नर / मादा</label>
+      <div class="toggle-group">
+        <button class="toggle-btn" id="cBtnMale" onclick="setCalcSex('male')">🐐 <span data-en="Male" data-hi="नर">नर</span></button>
+        <button class="toggle-btn" id="cBtnFemale" onclick="setCalcSex('female')">🐑 <span data-en="Female" data-hi="मादा">मादा</span></button>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label class="req" data-en="Teeth" data-hi="दांत">दांत</label>
+        <select id="cTeeth" onchange="recalcCalc()">
+          <option value="" data-en="Select" data-hi="चुनें">चुनें</option>
+          <option value="0" data-en="0 (milk teeth)" data-hi="0 (दूध के दांत)">0 (दूध के दांत)</option>
+          <option value="2" data-en="2 teeth" data-hi="2 दांत">2 दांत</option>
+          <option value="4" data-en="4 teeth" data-hi="4 दांत">4 दांत</option>
+          <option value="6" data-en="6 teeth" data-hi="6 दांत">6 दांत</option>
+          <option value="8" data-en="8 teeth" data-hi="8 दांत">8 दांत</option>
+        </select>
+      </div>
+      <div class="field"><label class="req" data-en="Quality" data-hi="क्वालिटी">क्वालिटी</label>
+        <select id="cQuality" onchange="recalcCalc()">
+          <option value="" data-en="Select" data-hi="चुनें">चुनें</option>
+          <option value="1st" data-en="First" data-hi="पहली">पहली</option>
+          <option value="2nd" data-en="Second" data-hi="दूसरी">दूसरी</option>
+          <option value="3rd" data-en="Third" data-hi="तीसरी">तीसरी</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label data-en="Scale weight (kg)" data-hi="तराजू वजन (kg)">तराजू वजन (kg)</label><input type="number" id="cWeight" oninput="recalcCalc()"></div>
+    <div class="weight-divider" data-en="— or by measurement —" data-hi="— या माप से —">— या माप से —</div>
+    <div class="row2" style="margin-top:8px;">
+      <div class="field"><label data-en="HG (cm)" data-hi="HG (cm)">HG (cm)</label><input type="number" id="cHg" oninput="recalcCalc()"></div>
+      <div class="field"><label data-en="BL (cm)" data-hi="BL (cm)">BL (cm)</label><input type="number" id="cBl" oninput="recalcCalc()"></div>
+    </div>
+    <div class="eff-weight-row" id="cEffRow" style="display:none;">
+      <div class="eff-weight-label" data-en="Effective weight" data-hi="प्रभावी वजन">प्रभावी वजन</div>
+      <div class="eff-weight-value" id="cEffVal">— kg</div>
+    </div>
+  </div>
+  <div class="warning-msg" id="cWarning" data-en="⚠️ This animal doesn't fall in our purchase category." data-hi="⚠️ यह पशु हमारी खरीद श्रेणी में नहीं आता।">⚠️ यह पशु हमारी खरीद श्रेणी में नहीं आता।</div>
+  <div class="result-card" id="cResult">
+    <div class="result-row"><span class="result-label" data-en="Category" data-hi="श्रेणी">श्रेणी</span><span class="result-value" id="cCat">—</span></div>
+    <div class="result-row"><span class="result-label" data-en="Rate card (₹/kg)" data-hi="रेट कार्ड (₹/kg)">रेट कार्ड (₹/kg)</span><span class="result-value" id="cRate">—</span></div>
+    <hr class="result-divider">
+    <div class="result-row"><span class="result-label" data-en="Estimated price" data-hi="अनुमानित मूल्य">अनुमानित मूल्य</span><span class="result-value big" id="cFinal">₹—</span></div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: SETTINGS ══ -->
+<div class="screen" id="screen-settings">
+  <div class="back-row"><div class="back-ic" onclick="showScreen('camps')">←</div><div><div class="scr-title" data-en="Settings" data-hi="सेटिंग्स">सेटिंग्स</div></div></div>
+
+  <div class="card">
+    <div class="card-title" data-en="Claude AI - quality suggestion" data-hi="Claude AI - क्वालिटी पहचान">Claude AI - क्वालिटी पहचान</div>
+    <p style="font-size:13px; color:var(--grey-500); margin-bottom:4px;" data-en="AI will automatically suggest a quality grade from the animal's side photo." data-hi="पशु की साइड फोटो से AI स्वचालित रूप से क्वालिटी का अनुमान लगाएगा।">पशु की साइड फोटो से AI स्वचालित रूप से क्वालिटी का अनुमान लगाएगा।</p>
+    <p style="font-size:11.5px; color:var(--grey-500);" id="aiProxyStatus">यह केंद्रीय रूप से सेट है — आपको कुछ नहीं करना है।</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title" data-en="Change PS" data-hi="PS बदलें">PS बदलें</div>
+    <div class="settings-row">
+      <div>
+        <div class="settings-label" id="settingsPsName">—</div>
+        <div class="settings-sub" data-en="Current PS" data-hi="वर्तमान PS">वर्तमान PS</div>
+      </div>
+      <button class="btn-small" onclick="changePSUser()" data-en="Change" data-hi="बदलें">बदलें</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title" data-en="APK / Offline use" data-hi="APK / ऑफलाइन उपयोग">APK / ऑफलाइन उपयोग</div>
+    <p style="font-size:13px; color:var(--grey-500); margin-bottom:10px;" data-en="This app works offline. Install it like an app on Android:" data-hi="यह ऐप ऑफलाइन काम करती है। Android पर APK की तरह इंस्टॉल करें:">यह ऐप ऑफलाइन काम करती है। Android पर APK की तरह इंस्टॉल करें:</p>
+    <ol style="font-size:13px; color:var(--grey-700); padding-left:18px; line-height:2;">
+      <li><span data-en="Open" data-hi="Chrome में">Chrome में</span> <strong id="settingsAppUrl">harikakante-sys.github.io/sale-camp</strong> <span data-en="in Chrome" data-hi="खोलें">खोलें</span></li>
+      <li><span data-en="Chrome menu →" data-hi="Chrome मेनू →">Chrome मेनू →</span> <strong>"Add to Home Screen"</strong></li>
+      <li><span data-en="Now the app works even without internet" data-hi="अब ऐप बिना इंटरनेट के भी चलेगी">अब ऐप बिना इंटरनेट के भी चलेगी</span></li>
+    </ol>
+    <p style="font-size:11px; color:var(--grey-500); margin-top:8px;" data-en="Data syncs once internet is available." data-hi="डेटा तब sync होगा जब इंटरनेट मिलेगा।">डेटा तब sync होगा जब इंटरनेट मिलेगा।</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title" data-en="Data" data-hi="डेटा">डेटा</div>
+    <div class="settings-row">
+      <div>
+        <div class="settings-label" data-en="Sync" data-hi="सिंक करें">सिंक करें</div>
+        <div class="settings-sub" id="settingsPendingCount">—</div>
+      </div>
+      <button class="btn-small" onclick="flushQueue(true)">Sync</button>
+    </div>
+    <div class="settings-row">
+      <div>
+        <div class="settings-label" style="color:var(--red);" data-en="Clear data" data-hi="डेटा साफ करें">डेटा साफ करें</div>
+        <div class="settings-sub" data-en="Erase all local data (be careful!)" data-hi="सभी local data मिटाएं (सावधानी से!)">सभी local data मिटाएं (सावधानी से!)</div>
+      </div>
+      <button class="btn-small" style="color:var(--red); border-color:var(--red);" onclick="clearAllData()" data-en="Erase" data-hi="मिटाएं">मिटाएं</button>
+    </div>
+  </div>
+</div>
+
+<div class="success-toast" id="toast"></div>
+
+<!-- ══ TABS ══ -->
+<div class="tabs">
+  <div class="tab active" data-tab="camps" onclick="showScreen('camps')"><span class="tab-ic">🏠</span><span data-en="Camps" data-hi="शिविर">शिविर</span></div>
+  <div class="tab" data-tab="calc" onclick="showScreen('calc')"><span class="tab-ic">🧮</span><span data-en="Calculator" data-hi="कैलकुलेटर">कैलकुलेटर</span></div>
+</div>
+
+<script>
+/* ═══════════════ CONFIG ═══════════════ */
+const SUPABASE_URL = "https://qiggtdqsxwssieznuuwq.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFpZ2d0ZHFzeHdzc2llem51dXdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNDg3MDcsImV4cCI6MjA5ODkyNDcwN30.d3205FMU7nuel1_eANgvj4bYRAH5iTKJ4CopMvMo-r4";
+const FALLBACK_REGIONS = ["Sarwankhera", "Akbarpur", "Amraudha"];
+const HISTORY_DAYS = 30;
+// URL of the Google Apps Script proxy that holds the real Claude API key
+// server-side (see claude_proxy_appsscript.gs). The app never sees the key
+// itself — it just calls this URL with a photo and gets back a quality
+// suggestion. Leave as the placeholder to turn the AI suggestion feature off.
+const CLAUDE_PROXY_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+const sb = (SUPABASE_URL.startsWith("http")) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+/* ═══════════════ LANGUAGE (Hindi default, English toggle) ═══════════════
+   Static text uses data-en/data-hi attributes swapped by applyLang().
+   Dynamic (JS-generated) text uses the L(en, hi) helper below. */
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } },
+  set(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+};
+
+let lang = store.get('sc_lang', 'hi');
+function L(en, hi) { return lang === 'en' ? en : hi; }
+function fmtNum(n) { return n.toLocaleString(lang === 'en' ? 'en-IN' : 'hi-IN'); }
+
+// Category labels shown on-screen. pricing.js's own `label` field is Hindi-only
+// (kept as-is — it's covered by the pricing tests and not worth touching for a
+// display-only change), so the UI maps category.key to a bilingual label here.
+const CATEGORY_LABELS = {
+  young_male_small:   { hi: 'नर - छोटा (<17 kg)', en: 'Young male - small (<17 kg)' },
+  young_male_regular: { hi: 'नर - सामान्य (17-26 kg)', en: 'Young male - regular (17-26 kg)' },
+  young_male_body:    { hi: 'नर - बड़ा (>26 kg)', en: 'Young male - large (>26 kg)' },
+  old_female:         { hi: 'पुरानी मादा (6-8 दांत)', en: 'Old female (6-8 teeth)' }
+};
+function categoryLabel(key) { return (CATEGORY_LABELS[key] && CATEGORY_LABELS[key][lang]) || key; }
+
+function setLang(l) { lang = l; store.set('sc_lang', lang); applyLang(); }
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-en]').forEach(el => {
+    el.textContent = lang === 'en' ? el.getAttribute('data-en') : el.getAttribute('data-hi');
+  });
+  document.querySelectorAll('[data-ph-en]').forEach(el => {
+    el.setAttribute('placeholder', lang === 'en' ? el.getAttribute('data-ph-en') : el.getAttribute('data-ph-hi'));
+  });
+  const hiBtn = document.getElementById('langBtnHi'), enBtn = document.getElementById('langBtnEn');
+  if (hiBtn && enBtn) { hiBtn.classList.toggle('active', lang === 'hi'); enBtn.classList.toggle('active', lang === 'en'); }
+
+  renderPsOverlay();
+  updateSyncBadge();
+  renderSyncError(store.get('sc_last_sync_error', null));
+  const activeScreen = document.querySelector('.screen.active');
+  if (!activeScreen) return;
+  if (activeScreen.id === 'screen-camps') renderCampsList();
+  if (activeScreen.id === 'screen-campdetail') renderCampDetail();
+  if (activeScreen.id === 'screen-householddetail') renderHouseholdDetail();
+  if (activeScreen.id === 'screen-newgoat') recalcAddGoat();
+  if (activeScreen.id === 'screen-goatdetail') renderGoatDetail();
+  if (activeScreen.id === 'screen-calc') recalcCalc();
+  if (activeScreen.id === 'screen-settings') renderSettings();
+}
+
+/* ═══════════════ STATE ═══════════════ */
+let ps = store.get('sc_ps', null);
+let psListCache = store.get('sc_ps_list_cache', []);
+let camps = store.get('sc_camps', []);
+let households = store.get('sc_households', []);
+let goats = store.get('sc_goats', []);
+let pending = store.get('sc_pending', []);
+let rateCache = store.get('sc_rate_cache', {});
+let regionsCache = store.get('sc_regions_cache', []);
+
+let sex = null, response = null, currentCampId = null, currentHouseholdId = null, currentGoatId = null;
+let calcSex = null;
+let aiSuggestedQuality = null;
+let frontPhotoData = null, leftPhotoData = null, backPhotoData = null;
+
+/* ═══════════════ INIT ═══════════════ */
+window.onload = async () => {
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  document.getElementById('settingsAppUrl').textContent = location.host + location.pathname;
+  await refreshPsList();
+  await refreshRegions();
+  populateRegionSelects();
+  renderPsOverlay();
+  if (ps) {
+    document.getElementById('psOverlay').classList.add('hidden');
+    document.getElementById('headerPsLine').textContent = '👤 ' + ps.name + ' · ' + ps.region;
+  }
+  updateSyncBadge();
+  renderSyncError(store.get('sc_last_sync_error', null));
+  renderCampsList();
+  applyLang();
+  window.addEventListener('online', () => flushQueue());
+  flushQueue();
+};
+
+/* ═══════════════ PS SELECTION ═══════════════ */
+async function refreshPsList() {
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('ps_list').select('name, phone, region, weight_mode').eq('active', true);
+      if (!error && data && data.length) { psListCache = data; store.set('sc_ps_list_cache', psListCache); }
+    } catch (e) {}
+  }
+}
+function renderPsOverlay() {
+  const icons = ['🌸','🌻','🌼','🌺','🌷','🍀'];
+  const el = document.getElementById('psOptions');
+  if (!psListCache.length) { el.innerHTML = '<div style="color:white;font-size:13px;">' + L('No PS list found - connect to the internet','कोई PS सूची नहीं मिली - इंटरनेट से जुड़ें') + '</div>'; return; }
+  el.innerHTML = psListCache.map((p,i) => `
+    <button class="ps-option" onclick='selectPS(${JSON.stringify(p)})'>
+      <span class="ps-icon">${icons[i%icons.length]}</span><span>${p.name}</span>
+    </button>`).join('');
+}
+function selectPS(p) {
+  ps = { name:p.name, phone:p.phone, region:p.region, weight_mode:p.weight_mode||'scale' };
+  store.set('sc_ps', ps);
+  document.getElementById('psOverlay').classList.add('hidden');
+  document.getElementById('headerPsLine').textContent = '👤 ' + ps.name + ' · ' + ps.region;
+  document.getElementById('newRegion').value = ps.region;
+  renderCampsList();
+}
+function changePSUser() {
+  if (!confirm(L('Do you want to change PS?','क्या आप PS बदलना चाहते हैं?'))) return;
+  ps = null; store.set('sc_ps', null);
+  document.getElementById('psOverlay').classList.remove('hidden');
+  renderPsOverlay();
+}
+
+/* ═══════════════ SCREEN NAV ═══════════════ */
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => {
+    const mainScreens = ['camps','calc'];
+    t.classList.toggle('active', t.dataset.tab === name || (!mainScreens.includes(name) && t.dataset.tab === 'camps'));
+  });
+  if (name === 'camps') renderCampsList();
+  if (name === 'newcamp') { document.getElementById('newCampDate').value = new Date().toISOString().slice(0,10); if(ps) document.getElementById('newRegion').value = ps.region; }
+  if (name === 'campdetail') renderCampDetail();
+  if (name === 'householddetail') renderHouseholdDetail();
+  if (name === 'newgoat') prepAddGoat();
+  if (name === 'settings') renderSettings();
+}
+
+/* ═══════════════ REGIONS + RATE CARD ═══════════════ */
+async function refreshRegions() {
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('rate_cards').select('region');
+      if (!error && data) { const set=[...new Set(data.map(r=>r.region))]; if(set.length){regionsCache=set; store.set('sc_regions_cache',regionsCache);} }
+    } catch(e) {}
+  }
+  if (!regionsCache.length) regionsCache = FALLBACK_REGIONS;
+}
+function populateRegionSelects() {
+  ['newRegion','cRegion'].forEach(id => {
+    const el = document.getElementById(id);
+    const cur = el.value;
+    el.innerHTML = regionsCache.map(r=>`<option value="${r}">${r}</option>`).join('');
+    if(cur) el.value = cur;
+  });
+}
+async function refreshRateCard(region) {
+  if (!sb) return rateCache[region]||null;
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const {data:cards,error} = await sb.from('rate_cards').select('id,version,buffer,effective_from,effective_to').eq('region',region).eq('is_active',true).lte('effective_from',today).order('effective_from',{ascending:false}).limit(5);
+    if (error||!cards||!cards.length) return rateCache[region]||null;
+    const valid = cards.find(c=>!c.effective_to||c.effective_to>=today)||cards[0];
+    const {data:lines} = await sb.from('rate_card_lines').select('category,quality,rate_per_kg').eq('rate_card_id',valid.id);
+    const lineMap={};
+    (lines||[]).forEach(l=>{lineMap[l.category+'|'+l.quality]=l.rate_per_kg;});
+    const combined={version:valid.version,buffer:valid.buffer,lines:lineMap,fetched_at:new Date().toISOString()};
+    rateCache[region]=combined; store.set('sc_rate_cache',rateCache);
+    return combined;
+  } catch(e){ return rateCache[region]||null; }
+}
+function computeQuote(region, sexVal, teethStr, weight, quality) {
+  return PricingLib.computeQuote(rateCache, region, sexVal, teethStr, weight, quality);
+}
+
+/* ═══════════════ WEIGHT HELPERS ═══════════════ */
+// Delegates to pricing.js's estimateWeightFromTape — the ONE place this
+// formula lives. This file used to have its own copy of this formula, and
+// that copy was missing the cm-to-inches conversion the real formula needs
+// (it produced weights ~13x too high, e.g. 400kg instead of ~30kg). That's
+// exactly the class of bug pricing.js exists to prevent — never duplicate
+// this logic here again; always call PricingLib.
+function estimateWeightFromTape(hg, bl) {
+  if (!hg || !bl || hg<30 || bl<30) return null;
+  const w = PricingLib.estimateWeightFromTape(hg, bl);
+  return w ? Math.round(w * 10) / 10 : null;
+}
+// mode-aware: only cross-checks scale vs. tape in 'both' mode. In 'scale'
+// mode a tape reading (if somehow present) is ignored, and vice versa for
+// '2dim'/'5dim' — this keeps each PS's assigned method authoritative,
+// matching the per-PS admin setting, instead of silently mixing methods.
+function computeEffectiveWeight(mode, scaleW, hg, bl) {
+  const sw = parseFloat(scaleW) || null;
+  const fw = estimateWeightFromTape(parseFloat(hg), parseFloat(bl));
+  if (mode === 'scale') return sw ? { weight: sw, scale: sw, formula: null, method: 'scale' } : null;
+  if (mode === '2dim' || mode === '5dim') return fw ? { weight: fw, scale: null, formula: fw, method: 'formula' } : null;
+  // mode === 'both'
+  if (sw && fw) return { weight: Math.min(sw, fw), scale: sw, formula: fw, method: 'min' };
+  if (sw) return { weight: sw, scale: sw, formula: null, method: 'scale' };
+  if (fw) return { weight: fw, scale: null, formula: fw, method: 'formula' };
+  return null;
+}
+
+/* ═══════════════ CAMPS ═══════════════ */
+function myCampsInWindow() {
+  if (!ps) return [];
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-HISTORY_DAYS);
+  const cutoffStr = cutoff.toISOString().slice(0,10);
+  return camps.filter(c=>c.ps_name===ps.name&&c.camp_date>=cutoffStr).sort((a,b)=>b.camp_date.localeCompare(a.camp_date));
+}
+function renderCampsList() {
+  if (!ps) return;
+  document.getElementById('campsSubline').textContent = ps.name+' · '+ps.region;
+  const list = myCampsInWindow();
+  const el = document.getElementById('campsList');
+  if (!list.length) { el.innerHTML='<div class="empty-state">'+L('No camps found','कोई शिविर नहीं मिला')+'</div>'; return; }
+  el.innerHTML = list.map(c => {
+    const hhs=households.filter(h=>h.camp_id===c.id);
+    const gs=goats.filter(g=>g.camp_id===c.id);
+    const rc=rateCache[c.region];
+    return `<div class="list-card" onclick="openCamp('${c.id}')">
+      <div class="list-card-top"><div class="list-card-name">${c.village_name}</div>
+        <span class="chip ${rc?'chip-ready':'chip-norate'}">${rc?L('Rate ready','रेट तैयार'):L('No rate card','रेट कार्ड नहीं')}</span></div>
+      <div class="list-card-meta">${c.region} · ${c.camp_date}</div>
+      <div class="list-card-stats">
+        <div><div class="list-card-stat-label">${L('Homes','घर')}</div><div class="list-card-stat-value">${hhs.length}</div></div>
+        <div><div class="list-card-stat-label">${L('Animals','पशु')}</div><div class="list-card-stat-value">${gs.length}</div></div>
+      </div></div>`;
+  }).join('');
+}
+function openCamp(id) { currentCampId=id; showScreen('campdetail'); }
+async function createCamp() {
+  const village = document.getElementById('newVillage').value.trim();
+  const region = document.getElementById('newRegion').value;
+  const date = document.getElementById('newCampDate').value;
+  if (!village||!region||!date) { showToast(L('⚠️ Fill in all details','⚠️ सभी जानकारी भरें'),false); return; }
+  const camp = { id:crypto.randomUUID(), village_name:village, region, camp_date:date, ps_name:ps.name, ps_phone:ps.phone||null, weight_mode:ps.weight_mode||'scale' };
+  camps.push(camp); store.set('sc_camps',camps);
+  queueWrite('insert','camps',camp);
+  await refreshRateCard(region);
+  currentCampId=camp.id; showScreen('campdetail');
+}
+function renderCampDetail() {
+  const c=camps.find(x=>x.id===currentCampId);
+  if(!c){showScreen('camps');return;}
+  document.getElementById('cdVillage').textContent=c.village_name;
+  document.getElementById('cdMeta').textContent=c.region+' · '+c.camp_date;
+  const rc=rateCache[c.region];
+  const statusEl=document.getElementById('cdRateStatus');
+  if(rc){statusEl.className='rate-status ok';statusEl.textContent='✓ '+L('Rate card v','रेट कार्ड v')+rc.version+' '+L('ready','तैयार');}
+  else{statusEl.className='rate-status bad';statusEl.textContent=L('⚠️ No rate card available','⚠️ रेट कार्ड उपलब्ध नहीं'); refreshRateCard(c.region).then(renderCampDetail);}
+  const hhs=households.filter(h=>h.camp_id===c.id);
+  const gs=goats.filter(g=>g.camp_id===c.id);
+  const interestedValue=gs.filter(g=>g.hh_response==='interested').reduce((s,g)=>s+g.final_price,0);
+  document.getElementById('cdHhCount').textContent=hhs.length;
+  document.getElementById('cdGoatCount').textContent=gs.length;
+  document.getElementById('cdInterestedValue').textContent='₹'+fmtNum(interestedValue);
+  const el=document.getElementById('hhList');
+  if(!hhs.length){el.innerHTML='<div class="empty-state">'+L('No households added yet','अभी कोई घर नहीं जोड़ा गया')+'</div>';return;}
+  el.innerHTML=hhs.map(h=>{
+    const hGoats=goats.filter(g=>g.household_id===h.id);
+    const hValue=hGoats.filter(g=>g.hh_response==='interested').reduce((s,g)=>s+g.final_price,0);
+    const expected=h.expected_goat_count?(hGoats.length+' / '+h.expected_goat_count):String(hGoats.length);
+    return `<div class="list-card" onclick="openHousehold('${h.id}')">
+      <div class="list-card-top"><div class="list-card-name">${h.hh_name}</div></div>
+      <div class="list-card-meta">${h.mobile||L('No mobile number','मोबाइल नहीं')}</div>
+      <div class="list-card-stats">
+        <div><div class="list-card-stat-label">${L('Animals','पशु')}</div><div class="list-card-stat-value">${expected}</div></div>
+        <div><div class="list-card-stat-label">${L('Interested value','इच्छुक मूल्य')}</div><div class="list-card-stat-value">₹${fmtNum(hValue)}</div></div>
+      </div></div>`;
+  }).join('');
+}
+
+/* ═══════════════ HOUSEHOLDS ═══════════════ */
+function createHousehold() {
+  const hh_name=document.getElementById('hhName').value.trim();
+  if(!hh_name){showToast(L('⚠️ Enter the household name','⚠️ घर का नाम भरें'),false);return;}
+  const mobile=document.getElementById('hhMobile').value.trim()||null;
+  const expected=parseInt(document.getElementById('hhExpected').value)||null;
+  const hh={id:crypto.randomUUID(),camp_id:currentCampId,hh_name,mobile,expected_goat_count:expected};
+  households.push(hh); store.set('sc_households',households);
+  queueWrite('insert','households',hh);
+  document.getElementById('hhName').value=''; document.getElementById('hhMobile').value=''; document.getElementById('hhExpected').value='';
+  currentHouseholdId=hh.id; showScreen('householddetail');
+}
+function openHousehold(id){currentHouseholdId=id; showScreen('householddetail');}
+function renderHouseholdDetail() {
+  const h=households.find(x=>x.id===currentHouseholdId);
+  if(!h){showScreen('campdetail');return;}
+  document.getElementById('hdName').textContent=h.hh_name;
+  document.getElementById('hdMeta').textContent=h.mobile||L('No mobile number','मोबाइल नहीं');
+  const hGoats=goats.filter(g=>g.household_id===h.id);
+  const value=hGoats.filter(g=>g.hh_response==='interested').reduce((s,g)=>s+g.final_price,0);
+  document.getElementById('hdGoatCount').textContent=hGoats.length+(h.expected_goat_count?(' / '+h.expected_goat_count):'');
+  document.getElementById('hdInterestedValue').textContent='₹'+fmtNum(value);
+  const catLabels={
+    young_male_small: L('Young male (small)','नर छोटा'),
+    young_male_regular: L('Young male (regular)','नर सामान्य'),
+    young_male_body: L('Young male (large)','नर बड़ा'),
+    old_female: L('Old female','पुरानी मादा')
+  };
+  const el=document.getElementById('goatList');
+  if(!hGoats.length){el.innerHTML='<div class="empty-state">'+L('No animals added yet','अभी कोई पशु नहीं जोड़ा गया')+'</div>';return;}
+  el.innerHTML=hGoats.slice().reverse().map(g=>{
+    const collChip=g.collection_weight_kg?`<span class="chip chip-collected">🚛 ${g.collection_weight_kg}kg</span>`:'';
+    const mandiChip=g.mandi_weight_kg?`<span class="chip chip-mandi">🏪 ${g.mandi_weight_kg}kg</span>`:'';
+    return `<div class="goat-row" onclick="openGoatDetail('${g.id}')">
+      <div class="goat-row-top">
+        <div class="goat-thumb">${(g.photos_taken>0)?'📷':'🐐'}</div>
+        <div class="goat-info">
+          <div class="gname">${catLabels[g.category]||g.category} · ${g.weight_kg} kg</div>
+          <div class="gmeta">${g.quality} ${L('quality','क्वालिटी')} · ₹${fmtNum(g.final_price)}</div>
+          <div class="goat-chips">${collChip}${mandiChip}</div>
+        </div>
+        <div style="font-size:18px; color:var(--grey-300);">›</div>
+      </div>
+      <div class="resp-row" onclick="event.stopPropagation()">
+        <button class="resp-btn resp-interested ${g.hh_response==='interested'?'sel':''}" onclick="setGoatResponse('${g.id}','interested')">✅ ${L('Interested','इच्छुक')}</button>
+        <button class="resp-btn resp-awaited ${g.hh_response==='awaited'?'sel':''}" onclick="setGoatResponse('${g.id}','awaited')">⏳ ${L('Awaited','सोच रहे')}</button>
+        <button class="resp-btn resp-not_interested ${g.hh_response==='not_interested'?'sel':''}" onclick="setGoatResponse('${g.id}','not_interested')">❌ ${L('Not interested','अनिच्छुक')}</button>
+      </div></div>`;
+  }).join('');
+}
+function setGoatResponse(id,resp) {
+  const g=goats.find(x=>x.id===id); if(!g) return;
+  g.hh_response=resp; g.updated_at=new Date().toISOString();
+  store.set('sc_goats',goats);
+  const stillPending=pending.find(p=>p.table==='goats'&&p.data.id===id&&p.op==='insert');
+  if(stillPending){stillPending.data.hh_response=resp;stillPending.data.updated_at=g.updated_at;store.set('sc_pending',pending);}
+  else queueWrite('update','goats',{id,hh_response:resp,updated_at:g.updated_at});
+  renderHouseholdDetail();
+}
+
+/* ═══════════════ ADD GOAT ═══════════════ */
+function prepAddGoat() {
+  const c=camps.find(x=>x.id===currentCampId);
+  const h=households.find(x=>x.id===currentHouseholdId);
+  if(!c||!h){showScreen('camps');return;}
+  document.getElementById('ngHhLine').textContent=h.hh_name+' · '+c.village_name;
+  sex=null; response=null; aiSuggestedQuality=null; frontPhotoData=null; leftPhotoData=null; backPhotoData=null;
+  ['btnMale','btnFemale','respInterested','respAwaited','respNotInterested'].forEach(id=>document.getElementById(id).className='toggle-btn');
+  ['gTeeth','gQuality'].forEach(id=>document.getElementById(id).value='');
+  ['gWeightScale','gHg','gBl','gHt','gRw','gPg'].forEach(id=>document.getElementById(id).value='');
+  ['Front','Left','Back'].forEach(side => {
+    document.getElementById('photo'+side).src='';
+    document.getElementById('photoBox'+side).classList.remove('has-photo');
+  });
+  document.getElementById('aiBadgeLeft').classList.remove('show');
+  document.getElementById('aiQualityRow').classList.add('hidden');
+  document.getElementById('gResult').classList.remove('show');
+  document.getElementById('gWarning').classList.remove('show');
+  document.getElementById('gNoRate').classList.remove('show');
+  document.getElementById('effWeightRow').style.display='none';
+  document.getElementById('btnSaveGoat').disabled=true;
+
+  // Show only the fields this PS's assigned weight_mode calls for (fixed for
+  // the whole camp — see camps.weight_mode, copied from ps_list at camp
+  // creation). This mirrors the per-PS setup the admin controls centrally;
+  // it's the PS's phone that decides which fields appear, not the PS herself.
+  const mode = c.weight_mode || 'scale';
+  document.getElementById('scaleFieldWrap').style.display = (mode==='scale'||mode==='both') ? 'block' : 'none';
+  document.getElementById('tapeFieldWrap').style.display = (mode==='2dim'||mode==='5dim'||mode==='both') ? 'block' : 'none';
+  document.getElementById('fiveDimExtraWrap').style.display = (mode==='5dim') ? 'grid' : 'none';
+  document.getElementById('weightDividerText').style.display = (mode==='both') ? 'block' : 'none';
+  document.getElementById('effWeightLabel').textContent = (mode==='both') ? L('Effective weight (lower)','प्रभावी वजन (न्यूनतम)') : L('Estimated weight','अनुमानित वजन');
+
+  if(!rateCache[c.region]) refreshRateCard(c.region);
+}
+
+function setSex(v){
+  sex=v;
+  document.getElementById('btnMale').className='toggle-btn'+(v==='male'?' sel':'');
+  document.getElementById('btnFemale').className='toggle-btn'+(v==='female'?' sel-female':'');
+  recalcAddGoat();
+}
+function setResponse(v){
+  response=v;
+  document.getElementById('respInterested').className='toggle-btn'+(v==='interested'?' sel':'');
+  document.getElementById('respAwaited').className='toggle-btn'+(v==='awaited'?' sel-amber':'');
+  document.getElementById('respNotInterested').className='toggle-btn'+(v==='not_interested'?' sel-red':'');
+  recalcAddGoat();
+}
+
+function triggerPhoto(side) {
+  document.getElementById('photoInput'+capitalise(side)).click();
+}
+function capitalise(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+
+async function onPhotoSelected(e, side) {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async()=>{
+    const data=reader.result;
+    if(side==='front') {
+      frontPhotoData=data;
+      document.getElementById('photoFront').src=data;
+      document.getElementById('photoBoxFront').classList.add('has-photo');
+    } else if(side==='left') {
+      leftPhotoData=data;
+      document.getElementById('photoLeft').src=data;
+      document.getElementById('photoBoxLeft').classList.add('has-photo');
+      // Trigger AI analysis — the side photo specifically is what feeds quality grading
+      await analyzePhotoWithClaude(data);
+    } else {
+      backPhotoData=data;
+      document.getElementById('photoBack').src=data;
+      document.getElementById('photoBoxBack').classList.add('has-photo');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ═══════════════ CLAUDE AI (via secure proxy — see claude_proxy_appsscript.gs) ═══════════════ */
+async function analyzePhotoWithClaude(base64Image) {
+  if(!CLAUDE_PROXY_URL || CLAUDE_PROXY_URL.startsWith('PASTE_')) return; // AI suggestion off until admin sets this up
+
+  const row=document.getElementById('aiQualityRow');
+  const label=document.getElementById('aiQualityLabel');
+  row.classList.remove('hidden');
+  label.innerHTML='<span class="spinner"></span> '+L('AI analyzing...','AI विश्लेषण हो रहा है...');
+
+  try {
+    const resp=await fetch(CLAUDE_PROXY_URL,{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ image: base64Image })
+    });
+
+    if(!resp.ok){row.classList.add('hidden'); return;}
+    const result=await resp.json();
+    if(result.error){ console.error('AI proxy error:', result.error); row.classList.add('hidden'); return; }
+    const q = result.quality || null;
+
+    if(q){
+      aiSuggestedQuality=q;
+      document.getElementById('aiBadgeLeft').classList.add('show');
+      const qLabels={'1st':L('First (1st)','पहली (1st)'),'2nd':L('Second (2nd)','दूसरी (2nd)'),'3rd':L('Third (3rd)','तीसरी (3rd)')};
+      label.textContent=L('AI suggestion: ','AI सुझाव: ')+qLabels[q];
+      // Auto-fill if not already set
+      if(!document.getElementById('gQuality').value){
+        document.getElementById('gQuality').value=q;
+        recalcAddGoat();
+      }
+    } else {
+      row.classList.add('hidden');
+    }
+  } catch(err){
+    row.classList.add('hidden');
+  }
+}
+
+function acceptAIQuality() {
+  if(aiSuggestedQuality){
+    document.getElementById('gQuality').value=aiSuggestedQuality;
+    recalcAddGoat();
+    document.getElementById('aiQualityRow').classList.add('hidden');
+    showToast(L('✓ AI quality accepted','✓ AI क्वालिटी स्वीकार की गई'),true);
+  }
+}
+
+function recalcAddGoat() {
+  const c=camps.find(x=>x.id===currentCampId);
+  const teeth=document.getElementById('gTeeth').value;
+  const quality=document.getElementById('gQuality').value;
+
+  // Compute effective weight, respecting this camp's assigned weight_mode
+  const scaleW=document.getElementById('gWeightScale').value;
+  const hg=document.getElementById('gHg').value;
+  const bl=document.getElementById('gBl').value;
+  const eff=computeEffectiveWeight(c?c.weight_mode:'scale',scaleW,hg,bl);
+
+  const effRow=document.getElementById('effWeightRow');
+  const effVal=document.getElementById('effWeightVal');
+  const effBreakdown=document.getElementById('effWeightBreakdown');
+  if(eff){
+    effRow.style.display='flex';
+    effVal.textContent=eff.weight.toFixed(1)+' kg';
+    if(eff.method==='min') effBreakdown.textContent=L('Scale: ','तराजू: ')+eff.scale+'kg | '+L('Formula: ','फॉर्मूला: ')+eff.formula+'kg → '+L('lower taken','न्यूनतम लिया गया');
+    else if(eff.method==='scale') effBreakdown.textContent=L('from scale','तराजू से');
+    else effBreakdown.textContent=L('from formula (HG+BL)','फॉर्मूला से (HG+BL)');
+  } else {
+    effRow.style.display='none';
+  }
+
+  const warn=document.getElementById('gWarning'),noRate=document.getElementById('gNoRate'),result=document.getElementById('gResult');
+  warn.classList.remove('show'); noRate.classList.remove('show'); result.classList.remove('show');
+  document.getElementById('btnSaveGoat').disabled=true;
+  if(!sex||!teeth||!quality||!eff||!c) return;
+
+  const quote=computeQuote(c.region,sex,teeth,eff.weight,quality);
+  if(!quote.eligible){warn.classList.add('show');return;}
+  if(quote.noRateCard){noRate.classList.add('show');return;}
+  document.getElementById('gCat').textContent=categoryLabel(quote.category.key);
+  document.getElementById('gRate').textContent='₹'+quote.rate;
+  document.getElementById('gFinal').textContent='₹'+fmtNum(quote.finalPrice);
+  result.classList.add('show');
+  if(response) document.getElementById('btnSaveGoat').disabled=false;
+}
+
+function saveGoat() {
+  const c=camps.find(x=>x.id===currentCampId);
+  const h=households.find(x=>x.id===currentHouseholdId);
+  if(!c||!h||!response){showToast(L('⚠️ Select the household response','⚠️ घर की प्रतिक्रिया चुनें'),false);return;}
+  const teeth=document.getElementById('gTeeth').value;
+  const quality=document.getElementById('gQuality').value;
+  const scaleW=document.getElementById('gWeightScale').value;
+  const hg=document.getElementById('gHg').value;
+  const bl=document.getElementById('gBl').value;
+  const eff=computeEffectiveWeight(c.weight_mode,scaleW,hg,bl);
+  const quote=computeQuote(c.region,sex,teeth,eff?eff.weight:0,quality);
+  if(!eff||!quote.eligible||quote.noRateCard){showToast(L('⚠️ Please fill in all details correctly first','⚠️ पहले पूरी जानकारी सही भरें'),false);return;}
+  const photosTaken=[frontPhotoData,leftPhotoData,backPhotoData].filter(Boolean).length;
+  const row={
+    id:crypto.randomUUID(), household_id:h.id, camp_id:c.id,
+    sex, teeth, quality, weight_kg:eff.weight,
+    weight_method:c.weight_mode, // scale / 2dim / 5dim / both — matches the camp's assigned mode
+    weight_source:eff.method,    // scale / formula / min — which number was actually used (detail, for 'both' mode)
+    weight_scale_kg:eff.scale||null, weight_formula_kg:eff.formula||null,
+    heart_girth:parseFloat(hg)||null, body_length:parseFloat(bl)||null,
+    height_cm:parseFloat(document.getElementById('gHt').value)||null,
+    rump_width:parseFloat(document.getElementById('gRw').value)||null,
+    paunch_girth:parseFloat(document.getElementById('gPg').value)||null,
+    ai_quality_suggested:aiSuggestedQuality||null,
+    category:quote.category.key, rate_per_kg:quote.rate, buffer:quote.buffer, final_price:quote.finalPrice,
+    hh_response:response, photos_taken:photosTaken, ps_name:ps.name,
+    collection_weight_kg:null, collection_datetime:null,
+    mandi_weight_kg:null, mandi_datetime:null,
+    created_at:new Date().toISOString(), updated_at:new Date().toISOString()
+  };
+  goats.push(row); store.set('sc_goats',goats);
+  queueWrite('insert','goats',row);
+  showToast(L('💾 Animal saved','💾 पशु सहेजा गया'),true);
+  showScreen('householddetail');
+}
+
+/* ═══════════════ GOAT DETAIL (collection + mandi) ═══════════════ */
+function openGoatDetail(id){
+  currentGoatId=id;
+  showScreen('goatdetail');
+  renderGoatDetail();
+}
+
+function renderGoatDetail() {
+  const g=goats.find(x=>x.id===currentGoatId); if(!g) return;
+  document.getElementById('gdSub').textContent=categoryLabel(g.category);
+
+  // Info card
+  let infoHtml=`
+    <div class="row2" style="gap:12px;">
+      <div><div style="font-size:11px;color:var(--grey-500);">${L('Sex','लिंग')}</div><div style="font-weight:600;">${g.sex==='male'?('🐐 '+L('Male','नर')):('🐑 '+L('Female','मादा'))}</div></div>
+      <div><div style="font-size:11px;color:var(--grey-500);">${L('Teeth','दांत')}</div><div style="font-weight:600;">${g.teeth}</div></div>
+      <div><div style="font-size:11px;color:var(--grey-500);">${L('Quality','क्वालिटी')}</div><div style="font-weight:600;">${g.quality}</div></div>
+      <div><div style="font-size:11px;color:var(--grey-500);">${L('Camp weight','शिविर वजन')}</div><div style="font-weight:600;">${g.weight_kg} kg</div></div>
+    </div>`;
+  if(g.heart_girth||g.body_length) {
+    infoHtml+=`<div style="margin-top:10px;font-size:12px;color:var(--grey-500);">${L('Measurements','माप')}: HG=${g.heart_girth||'—'}cm BL=${g.body_length||'—'}cm Ht=${g.height_cm||'—'}cm Rump=${g.rump_width||'—'} Paunch=${g.paunch_girth||'—'}</div>`;
+  }
+  infoHtml+=`<div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:13px;color:var(--grey-500);">${L('Final price','अंतिम मूल्य')}</span><span style="font-size:18px;font-weight:700;color:var(--green-dark);">₹${fmtNum(g.final_price)}</span></div>`;
+  document.getElementById('gdInfoContent').innerHTML=infoHtml;
+
+  // Collection weight section
+  const collForm=document.getElementById('weCollectionForm');
+  const collStatus=document.getElementById('weCollectionStatus');
+  if(g.collection_weight_kg){
+    collStatus.className='we-done'; collStatus.textContent='✓ '+g.collection_weight_kg+' kg';
+    collForm.innerHTML=`<div style="font-size:13px;color:var(--grey-700);">
+      <strong>${g.collection_weight_kg} kg</strong> — ${g.collection_datetime?new Date(g.collection_datetime).toLocaleString(lang==='en'?'en-IN':'hi-IN'):L('time unknown','समय अज्ञात')}</div>
+      ${g.collection_hg?`<div style="font-size:11px;color:var(--grey-500);margin-top:4px;">HG=${g.collection_hg}cm BL=${g.collection_bl||'—'}cm</div>`:''}
+      <button class="btn-secondary" style="margin-top:8px;" onclick="resetCollectionForm()">✏️ ${L('Change','बदलें')}</button>`;
+  } else {
+    collStatus.className='we-pending'; collStatus.textContent=L('Not recorded','दर्ज नहीं');
+    collForm.innerHTML=`
+      <div class="field"><label>${L('Weight (kg)','वजन (kg)')}</label><input type="number" id="collWeight" min="1" max="120" step="0.5" placeholder="जैसे 21.5" oninput="updateShrinkagePreview()"></div>
+      <div class="field"><label>${L('Date and time','तारीख और समय')}</label><input type="datetime-local" id="collDatetime"></div>
+      <div class="row2">
+        <div class="field"><label>HG (cm) <span class="opt">${L('optional','वैकल्पिक')}</span></label><input type="number" id="collHg" placeholder="—"></div>
+        <div class="field"><label>BL (cm) <span class="opt">${L('optional','वैकल्पिक')}</span></label><input type="number" id="collBl" placeholder="—"></div>
+      </div>
+      <button class="btn-amber" onclick="saveCollectionWeight()">💾 ${L('Save collection weight','संग्रह वजन सहेजें')}</button>`;
+    // Pre-fill datetime with current time
+    const dtEl=document.getElementById('collDatetime');
+    if(dtEl) dtEl.value=new Date().toISOString().slice(0,16);
+  }
+
+  // Mandi weight section
+  const mandiForm=document.getElementById('weMandiForm');
+  const mandiStatus=document.getElementById('weMandiStatus');
+  if(g.mandi_weight_kg){
+    mandiStatus.className='we-done'; mandiStatus.textContent='✓ '+g.mandi_weight_kg+' kg';
+    mandiForm.innerHTML=`<div style="font-size:13px;color:var(--grey-700);">
+      <strong>${g.mandi_weight_kg} kg</strong> — ${g.mandi_datetime?new Date(g.mandi_datetime).toLocaleString(lang==='en'?'en-IN':'hi-IN'):L('time unknown','समय अज्ञात')}</div>
+      <button class="btn-secondary" style="margin-top:8px;" onclick="resetMandiForm()">✏️ ${L('Change','बदलें')}</button>`;
+  } else {
+    mandiStatus.className='we-pending'; mandiStatus.textContent=L('Not recorded','दर्ज नहीं');
+    mandiForm.innerHTML=`
+      <div class="field"><label>${L('Weight (kg)','वजन (kg)')}</label><input type="number" id="mandiWeight" min="1" max="120" step="0.5" placeholder="जैसे 20.0" oninput="updateShrinkagePreview()"></div>
+      <div class="field"><label>${L('Date and time','तारीख और समय')}</label><input type="datetime-local" id="mandiDatetime"></div>
+      <button class="btn-primary" onclick="saveMandiWeight()">💾 ${L('Save mandi weight','मंडी वजन सहेजें')}</button>`;
+    const dtEl=document.getElementById('mandiDatetime');
+    if(dtEl) dtEl.value=new Date().toISOString().slice(0,16);
+  }
+
+  updateShrinkageDisplay();
+}
+
+function resetCollectionForm() {
+  const g=goats.find(x=>x.id===currentGoatId); if(!g) return;
+  g.collection_weight_kg=null; g.collection_datetime=null; store.set('sc_goats',goats);
+  renderGoatDetail();
+}
+function resetMandiForm() {
+  const g=goats.find(x=>x.id===currentGoatId); if(!g) return;
+  g.mandi_weight_kg=null; g.mandi_datetime=null; store.set('sc_goats',goats);
+  renderGoatDetail();
+}
+
+function saveCollectionWeight() {
+  const wEl=document.getElementById('collWeight');
+  const dtEl=document.getElementById('collDatetime');
+  const hgEl=document.getElementById('collHg');
+  const blEl=document.getElementById('collBl');
+  if(!wEl||!wEl.value){showToast(L('⚠️ Enter a weight','⚠️ वजन डालें'),false);return;}
+  const w=parseFloat(wEl.value);
+  const dt=(dtEl&&dtEl.value)?new Date(dtEl.value).toISOString():new Date().toISOString();
+  const hg=hgEl?parseFloat(hgEl.value)||null:null;
+  const bl=blEl?parseFloat(blEl.value)||null:null;
+  const g=goats.find(x=>x.id===currentGoatId); if(!g) return;
+  g.collection_weight_kg=w; g.collection_datetime=dt;
+  if(hg) g.collection_hg=hg;
+  if(bl) g.collection_bl=bl;
+  g.updated_at=new Date().toISOString();
+  store.set('sc_goats',goats);
+  queueWrite('update','goats',{id:g.id,collection_weight_kg:w,collection_datetime:dt,collection_hg:hg,collection_bl:bl,updated_at:g.updated_at});
+  showToast(L('✓ Collection weight saved','✓ संग्रह वजन सहेजा गया'),true);
+  renderGoatDetail();
+}
+
+function saveMandiWeight() {
+  const wEl=document.getElementById('mandiWeight');
+  const dtEl=document.getElementById('mandiDatetime');
+  if(!wEl||!wEl.value){showToast(L('⚠️ Enter a weight','⚠️ वजन डालें'),false);return;}
+  const w=parseFloat(wEl.value);
+  const dt=(dtEl&&dtEl.value)?new Date(dtEl.value).toISOString():new Date().toISOString();
+  const g=goats.find(x=>x.id===currentGoatId); if(!g) return;
+  g.mandi_weight_kg=w; g.mandi_datetime=dt; g.updated_at=new Date().toISOString();
+  store.set('sc_goats',goats);
+  queueWrite('update','goats',{id:g.id,mandi_weight_kg:w,mandi_datetime:dt,updated_at:g.updated_at});
+  showToast(L('✓ Mandi weight saved','✓ मंडी वजन सहेजा गया'),true);
+  renderGoatDetail();
+}
+
+function updateShrinkagePreview() { updateShrinkageDisplay(); }
+function updateShrinkageDisplay() {
+  const g=goats.find(x=>x.id===currentGoatId);
+  if(!g) return;
+  const cw=g.collection_weight_kg || parseFloat((document.getElementById('collWeight')||{}).value)||null;
+  const mw=g.mandi_weight_kg || parseFloat((document.getElementById('mandiWeight')||{}).value)||null;
+  const banner=document.getElementById('shrinkageBanner');
+  if(cw&&mw&&cw>0){
+    const pct=((cw-mw)/cw*100).toFixed(1);
+    banner.style.display='flex';
+    document.getElementById('shrinkageVal').textContent=pct+'%';
+  } else {
+    banner.style.display='none';
+  }
+}
+
+/* ═══════════════ CALCULATOR ═══════════════ */
+function setCalcSex(v){
+  calcSex=v;
+  document.getElementById('cBtnMale').className='toggle-btn'+(v==='male'?' sel':'');
+  document.getElementById('cBtnFemale').className='toggle-btn'+(v==='female'?' sel-female':'');
+  recalcCalc();
+}
+async function recalcCalc(){
+  const region=document.getElementById('cRegion').value;
+  const teeth=document.getElementById('cTeeth').value;
+  const quality=document.getElementById('cQuality').value;
+  const scaleW=document.getElementById('cWeight').value;
+  const hg=document.getElementById('cHg').value;
+  const bl=document.getElementById('cBl').value;
+  const eff=computeEffectiveWeight('both',scaleW,hg,bl); // standalone calculator: always offer both, take the lower
+  const effRow=document.getElementById('cEffRow');
+  if(eff){effRow.style.display='flex'; document.getElementById('cEffVal').textContent=eff.weight.toFixed(1)+' kg';}
+  else{effRow.style.display='none';}
+  const warn=document.getElementById('cWarning'),result=document.getElementById('cResult');
+  warn.classList.remove('show'); result.classList.remove('show');
+  if(!region||!calcSex||!teeth||!quality||!eff) return;
+  if(!rateCache[region]) await refreshRateCard(region);
+  const quote=computeQuote(region,calcSex,teeth,eff.weight,quality);
+  if(!quote.eligible){warn.textContent=L("⚠️ This animal doesn't fall in our purchase category.",'⚠️ यह पशु हमारी खरीद श्रेणी में नहीं आता।');warn.classList.add('show');return;}
+  if(quote.noRateCard){warn.textContent=L('⚠️ No rate card is available for this region.','⚠️ इस क्षेत्र के लिए रेट कार्ड उपलब्ध नहीं है।');warn.classList.add('show');return;}
+  document.getElementById('cCat').textContent=categoryLabel(quote.category.key);
+  document.getElementById('cRate').textContent='₹'+quote.rate;
+  document.getElementById('cFinal').textContent='₹'+fmtNum(quote.finalPrice);
+  result.classList.add('show');
+}
+
+/* ═══════════════ SETTINGS ═══════════════ */
+function renderSettings() {
+  document.getElementById('aiProxyStatus').textContent = (CLAUDE_PROXY_URL && !CLAUDE_PROXY_URL.startsWith('PASTE_'))
+    ? L("This is set up centrally — you don't need to do anything.",'यह केंद्रीय रूप से सेट है — आपको कुछ नहीं करना है।')
+    : L("AI quality suggestion is currently off (admin hasn't set up the proxy).",'AI क्वालिटी सुझाव अभी बंद है (admin ने प्रॉक्सी सेट नहीं की)।');
+  document.getElementById('settingsPsName').textContent=ps?ps.name:'—';
+  const p=pending.length;
+  document.getElementById('settingsPendingCount').textContent=p?(p+' '+L('records pending sync','रिकॉर्ड sync बाकी')):L('All synced','सब sync हो गया');
+}
+function clearAllData(){
+  if(!confirm(L('⚠️ All local data will be erased. Are you sure?','⚠️ सभी local data मिट जाएगा। क्या आप सुनिश्चित हैं?'))) return;
+  if(!confirm(L('Confirm again — this cannot be undone.','दोबारा पुष्टि करें — यह पूर्ववत नहीं होगा।'))) return;
+  ['sc_ps','sc_camps','sc_households','sc_goats','sc_pending','sc_rate_cache','sc_last_sync_error'].forEach(k=>localStorage.removeItem(k));
+  location.reload();
+}
+
+/* ═══════════════ OFFLINE QUEUE / SYNC ═══════════════ */
+function queueWrite(op,table,data){
+  pending.push({op,table,data}); store.set('sc_pending',pending); updateSyncBadge(); flushQueue();
+}
+async function flushQueue(manual){
+  if(!sb){updateSyncBadge();if(manual)showToast(L('⚠️ Supabase connection is not set up','⚠️ Supabase कनेक्शन सेट नहीं है'),false);return;}
+  let lastError=null;
+  while(pending.length){
+    const item=pending[0];
+    try{
+      let res;
+      if(item.op==='insert') res=await sb.from(item.table).insert(item.data);
+      else res=await sb.from(item.table).update(item.data).eq('id',item.data.id);
+      if(res.error) throw res.error;
+      pending.shift(); store.set('sc_pending',pending); lastError=null;
+    } catch(e){
+      lastError={message:(e&&e.message)?e.message:String(e),table:item.table,at:new Date().toISOString()};
+      break;
+    }
+  }
+  store.set('sc_last_sync_error',lastError);
+  renderSyncError(lastError);
+  updateSyncBadge();
+  if(manual&&!pending.length&&!lastError) showToast(L('✓ Synced','✓ सिंक हो गया'),true);
+  if(manual&&lastError) showToast(L('⚠️ Sync failed - see details below','⚠️ सिंक विफल - नीचे विवरण देखें'),false);
+}
+function renderSyncError(err){
+  const bar=document.getElementById('syncErrorBar');
+  if(err){bar.style.display='block';bar.textContent='⚠️ '+L('Sync failed','सिंक विफल')+' ('+err.table+'): '+err.message+' — '+new Date(err.at).toLocaleTimeString(lang==='en'?'en-IN':'hi-IN');}
+  else bar.style.display='none';
+}
+function updateSyncBadge(){
+  const badge=document.getElementById('syncBadge');
+  if(pending.length){badge.className='sync-badge sync-pending';badge.textContent='⏳ '+pending.length+' '+L('pending','बाकी');}
+  else{badge.className='sync-badge sync-ok';badge.textContent='✓ '+L('Synced','सिंक हो गया');}
+}
+
+/* ═══════════════ TOAST ═══════════════ */
+function showToast(msg,ok=true){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.style.background=ok?'var(--green-dark)':'var(--amber)';
+  t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600);
+}
+</script>
+</body>
+</html>
